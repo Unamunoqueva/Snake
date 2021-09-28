@@ -90,4 +90,3 @@ while not end_game:
         end_game = True
 
     os.system("cls")
-    print (tail)
