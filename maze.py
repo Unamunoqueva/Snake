@@ -12,7 +12,7 @@ tail_length = 0
 tail = []
 end_game = False
 
-# Generate random objects
+#Generate random objects
 
 
 
