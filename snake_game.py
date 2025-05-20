@@ -3,6 +3,7 @@
 import os
 import random
 import sys
+import time
 from typing import List
 
 try:
@@ -27,6 +28,7 @@ class SnakeGame:
         self.tail: List[List[int]] = []
         self.end_game = False
         self.score = 0
+        self.last_direction = "d"
 
     def clear_screen(self) -> None:
         """Clear the terminal screen in a cross-platform way."""
@@ -64,23 +66,32 @@ class SnakeGame:
         print(f"Score: {self.score} - Level: {self.level}")
 
     def read_input(self) -> str:
-        """Read and validate user input."""
+        """Read and validate user input without blocking."""
+        allowed = ("w", "a", "s", "d", "q")
         if readchar is not None:
-            # ``readchar`` may return either ``str`` or ``bytes`` depending
-            # on the installed version. Handle both cases explicitly.
-            direction = readchar.readchar()
-            if isinstance(direction, bytes):
-                direction = direction.decode()
+            import select
+
+            if select.select([sys.stdin], [], [], 0.1)[0]:
+                direction = readchar.readchar()
+                if isinstance(direction, bytes):
+                    direction = direction.decode()
+            else:
+                return ""
         else:
             # Fallback to built-in methods when readchar is unavailable
             if os.name == "nt":  # Windows
                 import msvcrt
 
+                if not msvcrt.kbhit():
+                    return ""
                 direction = msvcrt.getch().decode()
             else:
+                import select
                 import termios
                 import tty
 
+                if not select.select([sys.stdin], [], [], 0.1)[0]:
+                    return ""
                 fd = sys.stdin.fileno()
                 old_settings = termios.tcgetattr(fd)
                 try:
@@ -88,34 +99,47 @@ class SnakeGame:
                     direction = sys.stdin.read(1)
                 finally:
                     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-        if direction not in ("w", "a", "s", "d", "q"):
+        if direction not in allowed:
             return ""
         return direction
 
     def update_position(self, direction: str) -> None:
         """Update the snake position based on the direction."""
-        if direction == "w":
-            self.tail.insert(0, self.my_position.copy())
-            self.tail = self.tail[: self.tail_length]
-            self.my_position[POS_Y] -= 1
-            self.my_position[POS_Y] %= self.height
-        elif direction == "a":
-            self.tail.insert(0, self.my_position.copy())
-            self.tail = self.tail[: self.tail_length]
-            self.my_position[POS_X] -= 1
-            self.my_position[POS_X] %= self.width
-        elif direction == "s":
-            self.tail.insert(0, self.my_position.copy())
-            self.tail = self.tail[: self.tail_length]
-            self.my_position[POS_Y] += 1
-            self.my_position[POS_Y] %= self.height
-        elif direction == "d":
-            self.tail.insert(0, self.my_position.copy())
-            self.tail = self.tail[: self.tail_length]
-            self.my_position[POS_X] += 1
-            self.my_position[POS_X] %= self.width
-        elif direction == "q":
+        if direction == "":
+            direction = self.last_direction
+
+        if direction == "q":
             self.end_game = True
+            return
+
+        new_position = self.my_position.copy()
+
+        if direction == "w":
+            new_position[POS_Y] -= 1
+        elif direction == "a":
+            new_position[POS_X] -= 1
+        elif direction == "s":
+            new_position[POS_Y] += 1
+        elif direction == "d":
+            new_position[POS_X] += 1
+        else:
+            return
+
+        # Wall collision detection
+        if (
+            new_position[POS_X] < 0
+            or new_position[POS_X] >= self.width
+            or new_position[POS_Y] < 0
+            or new_position[POS_Y] >= self.height
+        ):
+            print("Has chocado con la pared")
+            self.end_game = True
+            return
+
+        self.tail.insert(0, self.my_position.copy())
+        self.tail = self.tail[: self.tail_length]
+        self.my_position = new_position
+        self.last_direction = direction
 
         # Check collisions after moving
         if self.my_position in self.item_positions:
@@ -140,6 +164,7 @@ class SnakeGame:
             self.draw_map()
             direction = self.read_input()
             self.update_position(direction)
+            time.sleep(0.2)
 
 
 if __name__ == "__main__":
