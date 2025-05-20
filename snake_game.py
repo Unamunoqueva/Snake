@@ -68,6 +68,7 @@ class SnakeGame:
     def read_input(self) -> str:
         """Read and validate user input without blocking."""
         allowed = ("w", "a", "s", "d", "q")
+
         if os.name == "nt":  # Windows always relies on msvcrt
             import msvcrt
 
@@ -77,6 +78,9 @@ class SnakeGame:
             if isinstance(direction, bytes):
                 direction = direction.decode()
         elif readchar is not None:
+
+        if readchar is not None:
+
             import select
 
             if select.select([sys.stdin], [], [], 0.1)[0]:
@@ -92,9 +96,13 @@ class SnakeGame:
 
                 if not msvcrt.kbhit():
                     return ""
+
                 direction = msvcrt.getch()
                 if isinstance(direction, bytes):
                     direction = direction.decode()
+
+                direction = msvcrt.getch().decode()
+
             else:
                 import select
                 import termios
