@@ -68,15 +68,38 @@ class SnakeGame:
     def read_input(self) -> str:
         """Read and validate user input without blocking."""
         allowed = ("w", "a", "s", "d", "q")
+
+        arrow_mapping = {}
+        if readchar is not None:
+            arrow_mapping = {
+                getattr(readchar, "key").UP: "w",
+                getattr(readchar, "key").DOWN: "s",
+                getattr(readchar, "key").LEFT: "a",
+                getattr(readchar, "key").RIGHT: "d",
+            }
+
+
         direction = ""
 
         if os.name == "nt":  # Windows always relies on msvcrt
             import msvcrt
 
             if msvcrt.kbhit():
+
+                char = msvcrt.getch()
+                if char in (b"\x00", b"\xe0"):
+                    second = msvcrt.getch()
+                    mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
+                    direction = mapping.get(second, "")
+                else:
+                    if isinstance(char, bytes):
+                        char = char.decode()
+                    direction = char
+
                 direction = msvcrt.getch()
                 if isinstance(direction, bytes):
                     direction = direction.decode()
+
         elif readchar is not None:
             import select
 
@@ -84,15 +107,30 @@ class SnakeGame:
                 direction = readchar.readchar()
                 if isinstance(direction, bytes):
                     direction = direction.decode()
+
+                direction = arrow_mapping.get(direction, direction)
+
         else:
             # Fallback to built-in methods when readchar is unavailable
             if os.name == "nt":  # Windows (this branch shouldn't occur)
                 import msvcrt
 
                 if msvcrt.kbhit():
+
+                    char = msvcrt.getch()
+                    if char in (b"\x00", b"\xe0"):
+                        second = msvcrt.getch()
+                        mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
+                        direction = mapping.get(second, "")
+                    else:
+                        if isinstance(char, bytes):
+                            char = char.decode()
+                        direction = char
+
                     direction = msvcrt.getch()
                     if isinstance(direction, bytes):
                         direction = direction.decode()
+
             else:
                 import select
                 import termios
@@ -103,7 +141,22 @@ class SnakeGame:
                     old_settings = termios.tcgetattr(fd)
                     try:
                         tty.setraw(fd)
+
+                        char = sys.stdin.read(1)
+                        if char == "\x1b":
+                            char += sys.stdin.read(2)
+                            mapping = {
+                                "\x1b[A": "w",
+                                "\x1b[B": "s",
+                                "\x1b[D": "a",
+                                "\x1b[C": "d",
+                            }
+                            direction = mapping.get(char, "")
+                        else:
+                            direction = char
+
                         direction = sys.stdin.read(1)
+
                     finally:
                         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
