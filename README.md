@@ -10,9 +10,13 @@ Este repositorio contiene una implementación sencilla del clásico juego **Snak
    ```bash
    pip install readchar
    ```
-2. Ejecuta el juego con:
+2. Ejecuta el juego en la terminal con:
    ```bash
    python snake_game.py
+   ```
+3. Si prefieres una ventana gráfica basada en Tkinter, usa:
+   ```bash
+   python snake_game_gui.py
    ```
 
 ## ⌨️ Controles
@@ -33,7 +37,8 @@ python -m unittest
 ## 📁 Estructura del proyecto
 
 - `snake_game.py` – Lógica principal del juego.
-- `maze.py` – Arranque rápido para iniciar la partida.
+- `maze.py` – Arranque rápido para iniciar la partida en la terminal.
+- `snake_game_gui.py` – Versión con interfaz gráfica basada en Tkinter.
 - `test_snake_game.py` – Conjunto de pruebas que validan el comportamiento del juego.
 
 ## 🔍 Detalles del código
