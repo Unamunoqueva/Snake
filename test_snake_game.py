@@ -28,6 +28,17 @@ class SnakeGameTestCase(unittest.TestCase):
         game.score = 12
         self.assertEqual(game.level, 3)
 
+    def test_wall_collision(self):
+        game = SnakeGame(width=3, height=3)
+        game.my_position = [0, 0]
+        game.update_position('a')
+        self.assertTrue(game.end_game)
+
+    def test_auto_move(self):
+        game = SnakeGame()
+        game.update_position('')
+        self.assertEqual(game.my_position, [4, 1])
+
 
 if __name__ == '__main__':
     unittest.main()
