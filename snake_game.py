@@ -66,7 +66,11 @@ class SnakeGame:
     def read_input(self) -> str:
         """Read and validate user input."""
         if readchar is not None:
-            direction = readchar.readchar().decode()
+            # ``readchar`` may return either ``str`` or ``bytes`` depending
+            # on the installed version. Handle both cases explicitly.
+            direction = readchar.readchar()
+            if isinstance(direction, bytes):
+                direction = direction.decode()
         else:
             # Fallback to built-in methods when readchar is unavailable
             if os.name == "nt":  # Windows
