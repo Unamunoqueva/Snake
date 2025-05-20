@@ -68,55 +68,45 @@ class SnakeGame:
     def read_input(self) -> str:
         """Read and validate user input without blocking."""
         allowed = ("w", "a", "s", "d", "q")
+        direction = ""
 
         if os.name == "nt":  # Windows always relies on msvcrt
             import msvcrt
 
-            if not msvcrt.kbhit():
-                return ""
-            direction = msvcrt.getch()
-            if isinstance(direction, bytes):
-                direction = direction.decode()
+            if msvcrt.kbhit():
+                direction = msvcrt.getch()
+                if isinstance(direction, bytes):
+                    direction = direction.decode()
         elif readchar is not None:
-
-        if readchar is not None:
-
             import select
 
             if select.select([sys.stdin], [], [], 0.1)[0]:
                 direction = readchar.readchar()
                 if isinstance(direction, bytes):
                     direction = direction.decode()
-            else:
-                return ""
         else:
             # Fallback to built-in methods when readchar is unavailable
             if os.name == "nt":  # Windows (this branch shouldn't occur)
                 import msvcrt
 
-                if not msvcrt.kbhit():
-                    return ""
-
-                direction = msvcrt.getch()
-                if isinstance(direction, bytes):
-                    direction = direction.decode()
-
-                direction = msvcrt.getch().decode()
-
+                if msvcrt.kbhit():
+                    direction = msvcrt.getch()
+                    if isinstance(direction, bytes):
+                        direction = direction.decode()
             else:
                 import select
                 import termios
                 import tty
 
-                if not select.select([sys.stdin], [], [], 0.1)[0]:
-                    return ""
-                fd = sys.stdin.fileno()
-                old_settings = termios.tcgetattr(fd)
-                try:
-                    tty.setraw(fd)
-                    direction = sys.stdin.read(1)
-                finally:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                if select.select([sys.stdin], [], [], 0.1)[0]:
+                    fd = sys.stdin.fileno()
+                    old_settings = termios.tcgetattr(fd)
+                    try:
+                        tty.setraw(fd)
+                        direction = sys.stdin.read(1)
+                    finally:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
         if direction not in allowed:
             return ""
         return direction
