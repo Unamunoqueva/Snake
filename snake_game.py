@@ -96,9 +96,6 @@ class SnakeGame:
                         char = char.decode()
                     direction = char
 
-                direction = msvcrt.getch()
-                if isinstance(direction, bytes):
-                    direction = direction.decode()
 
         elif readchar is not None:
             import select
@@ -127,9 +124,6 @@ class SnakeGame:
                             char = char.decode()
                         direction = char
 
-                    direction = msvcrt.getch()
-                    if isinstance(direction, bytes):
-                        direction = direction.decode()
 
             else:
                 import select
@@ -155,7 +149,6 @@ class SnakeGame:
                         else:
                             direction = char
 
-                        direction = sys.stdin.read(1)
 
                     finally:
                         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
