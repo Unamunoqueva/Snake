@@ -19,7 +19,15 @@ class SnakeGameGUI(SnakeGame):
         self.canvas.pack()
         self.root.bind("<KeyPress>", self.on_key_press)
         self.next_direction = ""
-        self.game_over_text = None
+        # For game over UI elements
+        self.game_over_text_id = None
+        self.restart_button_widget = None
+        self.restart_button_window_id = None
+        self.quit_button_widget = None
+        self.quit_button_window_id = None
+        
+        # Initial setup
+        self.spawn_items() # Ensure items are there at the very beginning
 
     def on_key_press(self, event: tk.Event) -> None:
         key = event.keysym.lower()
@@ -54,21 +62,103 @@ class SnakeGameGUI(SnakeGame):
 
     def game_step(self) -> None:
         if self.end_game:
-            if self.game_over_text is None:
-                self.game_over_text = self.canvas.create_text(
-                    self.width * self.cell_size / 2,
-                    self.height * self.cell_size / 2,
-                    text="Game Over",
-                    fill="red",
-                    font=("Arial", 16),
-                )
+            # self.game_over_text_id is handled by _show_game_over_elements
+            self._show_game_over_elements() 
             return
+        
+        # If game is running, ensure game over elements are hidden
+        self._hide_game_over_elements()
+
         self.spawn_items()
         self.draw_map()
         direction = self.next_direction or self.last_direction
+        # If 'q' was pressed, self.next_direction will be 'q'.
+        # update_position handles self.end_game = True if direction is 'q'.
+        if self.next_direction == 'q': 
+            self.end_game = True # Explicitly set end_game if 'q' is from GUI key press
+            # Game will end and show Game Over screen on the next game_step
+            self.root.after(120, self.game_step)
+            return
+
         self.update_position(direction)
+        self.next_direction = "" # Clear after use
+
+        if self.end_game: # Check if update_position caused game over
+            # Game ended due to collision, call game_step immediately to show Game Over screen
+            # without the usual delay.
+            self.root.after(0, self.game_step) 
+        else:
+            self.root.after(120, self.game_step)
+
+    def _reset_game_state(self) -> None:
+        """Resets the game to its initial state."""
+        # Reset core game logic by re-initializing from the base class
+        # This will reset score, snake position, tail, items, end_game flag, last_direction
+        super().__init__(width=self.width, height=self.height, num_objects=self.num_objects)
+        
+        # Reset GUI specific state
         self.next_direction = ""
-        self.root.after(200, self.game_step)
+        # self.last_direction is reset by super().__init__
+        
+        self._hide_game_over_elements()
+        self.spawn_items() # Initial items for the new game
+        self.draw_map() # Draw initial map
+
+    def _restart_game_command(self) -> None:
+        """Command for the Restart button."""
+        self._reset_game_state()
+        self.game_step() # Start the game loop again
+
+    def _quit_game_command(self) -> None:
+        """Command for the Quit button."""
+        self.root.destroy()
+
+    def _show_game_over_elements(self) -> None:
+        """Displays 'Game Over' text and Restart/Quit buttons."""
+        if self.game_over_text_id is None:
+            self.game_over_text_id = self.canvas.create_text(
+                self.width * self.cell_size / 2,
+                self.height * self.cell_size / 3, # Positioned higher
+                text="Game Over",
+                fill="red",
+                font=("Arial", 24, "bold"),
+                tag="gameover"
+            )
+
+        button_y_offset = self.height * self.cell_size / 2
+        if self.restart_button_widget is None:
+            self.restart_button_widget = tk.Button(self.root, text="Restart", command=self._restart_game_command)
+            self.restart_button_window_id = self.canvas.create_window(
+                self.width * self.cell_size / 2, button_y_offset, window=self.restart_button_widget, tag="gameover"
+            )
+
+        if self.quit_button_widget is None:
+            self.quit_button_widget = tk.Button(self.root, text="Quit", command=self._quit_game_command)
+            self.quit_button_window_id = self.canvas.create_window(
+                self.width * self.cell_size / 2, button_y_offset + 40, window=self.quit_button_widget, tag="gameover"
+            )
+        
+        # Ensure all game over elements are on top
+        self.canvas.lift("gameover")
+
+
+    def _hide_game_over_elements(self) -> None:
+        """Hides 'Game Over' text and Restart/Quit buttons."""
+        if self.game_over_text_id is not None:
+            self.canvas.delete(self.game_over_text_id)
+            self.game_over_text_id = None
+        
+        if self.restart_button_widget is not None:
+            # self.canvas.delete(self.restart_button_window_id) # Widget is destroyed by .destroy()
+            self.restart_button_widget.destroy()
+            self.restart_button_widget = None
+            self.restart_button_window_id = None # ID becomes invalid once widget is destroyed
+
+        if self.quit_button_widget is not None:
+            # self.canvas.delete(self.quit_button_window_id)
+            self.quit_button_widget.destroy()
+            self.quit_button_widget = None
+            self.quit_button_window_id = None
 
     def run(self) -> None:
         self.root.after(0, self.game_step)
