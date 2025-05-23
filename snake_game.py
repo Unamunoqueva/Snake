@@ -124,7 +124,7 @@ class SnakeGame:
         elif readchar is not None:
             import select
 
-            if select.select([sys.stdin], [], [], 0.1)[0]:
+            if select.select([sys.stdin], [], [], 0.02)[0]:
                 direction = readchar.readchar()
                 if isinstance(direction, bytes):
                     direction = direction.decode()
@@ -143,10 +143,14 @@ class SnakeGame:
                         second = msvcrt.getch()
                         mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
                         direction = mapping.get(second, "")
+                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
+                    # No duplicate print here.
                     else:
                         if isinstance(char, bytes):
                             char = char.decode()
                         direction = char
+                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
+                    # No duplicate print here.
 
 
             else:
@@ -154,29 +158,31 @@ class SnakeGame:
                 import termios
                 import tty
 
-                if select.select([sys.stdin], [], [], 0.1)[0]:
+                if select.select([sys.stdin], [], [], 0.02)[0]:
                     fd = sys.stdin.fileno()
                     old_settings = termios.tcgetattr(fd)
                     try:
                         tty.setraw(fd)
 
                         char = sys.stdin.read(1)
-                        if char == "\x1b":
-                            char += sys.stdin.read(2)
-                            mapping = {
-                                "\x1b[A": "w",
-                                "\x1b[B": "s",
-                                "\x1b[D": "a",
-                                "\x1b[C": "d",
-                            }
-                            direction = mapping.get(char, "")
-                        else:
-                            direction = char
+                        if char == "\x1b": # Arrow key
+                            # Try to read the next two characters for escape sequence
+                            # Use a short timeout to avoid blocking if it's just ESC key
+                            if select.select([sys.stdin], [], [], 0.01)[0]:
+                                char += sys.stdin.read(2)
+                        
 
+                        if char == "\x1b[A": direction = "w"
+                        elif char == "\x1b[B": direction = "s"
+                        elif char == "\x1b[D": direction = "a"
+                        elif char == "\x1b[C": direction = "d"
+                        else:
+                            direction = char # For single characters like 'q', 'w', 'a', 's', 'd'
+                        
 
                     finally:
                         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
+        
         if direction not in allowed:
             return ""
         return direction
