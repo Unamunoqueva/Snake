@@ -196,6 +196,89 @@ class SnakeGameTestCase(unittest.TestCase):
 
         self.assertEqual(output_lines, expected_board_drawing_stripped)
 
+    # --- Tests for read_input logic ---
+
+    @patch('select.select') # Mock select to control execution path
+    @patch('snake_game.readchar') # Mock the readchar module used in SnakeGame
+    def test_read_input_readchar_arrow_keys_mapping(self, mock_readchar_module, mock_select):
+        game = SnakeGame()
+
+        # Configure mock_readchar_module to simulate readchar being available
+        # and having the 'key' attribute with UP, DOWN, LEFT, RIGHT
+        mock_readchar_module.key = unittest.mock.MagicMock()
+        mock_readchar_module.key.UP = "KEY_UP_CONST" # Arbitrary unique strings
+        mock_readchar_module.key.DOWN = "KEY_DOWN_CONST"
+        mock_readchar_module.key.LEFT = "KEY_LEFT_CONST"
+        mock_readchar_module.key.RIGHT = "KEY_RIGHT_CONST"
+
+        # Ensure os.name is not 'nt' so it tries the readchar branch
+        with patch('os.name', 'posix'):
+            # Simulate select indicating input is available on sys.stdin
+            mock_select.return_value = ([sys.stdin], [], [])
+
+            # Test UP arrow
+            mock_readchar_module.readchar.return_value = "KEY_UP_CONST"
+            self.assertEqual(game.read_input(), "w", "UP arrow should map to 'w'")
+
+            # Test DOWN arrow
+            mock_readchar_module.readchar.return_value = "KEY_DOWN_CONST"
+            self.assertEqual(game.read_input(), "s", "DOWN arrow should map to 's'")
+
+            # Test LEFT arrow
+            mock_readchar_module.readchar.return_value = "KEY_LEFT_CONST"
+            self.assertEqual(game.read_input(), "a", "LEFT arrow should map to 'a'")
+
+            # Test RIGHT arrow
+            mock_readchar_module.readchar.return_value = "KEY_RIGHT_CONST"
+            self.assertEqual(game.read_input(), "d", "RIGHT arrow should map to 'd'")
+
+            # Test a non-arrow key character pass-through
+            mock_readchar_module.readchar.return_value = "q"
+            self.assertEqual(game.read_input(), "q", "Non-arrow 'q' should pass through")
+    
+    @patch('select.select')
+    @patch('snake_game.readchar')
+    def test_read_input_allowed_filtering(self, mock_readchar_module, mock_select):
+        game = SnakeGame()
+        
+        # Ensure os.name is not 'nt' for readchar path
+        with patch('os.name', 'posix'):
+            mock_select.return_value = ([sys.stdin], [], [])
+
+            # Valid inputs
+            for valid_key in ["w", "a", "s", "d", "q"]:
+                mock_readchar_module.readchar.return_value = valid_key
+                self.assertEqual(game.read_input(), valid_key, f"Valid key '{valid_key}' should pass filter")
+
+            # Invalid inputs
+            for invalid_key in ["x", "z", " ", "\n", "W"]:
+                mock_readchar_module.readchar.return_value = invalid_key
+                self.assertEqual(game.read_input(), "", f"Invalid key '{invalid_key}' should be filtered to ''")
+            
+            # Test select timeout (no input)
+            mock_select.return_value = ([], [], []) # Simulate no input available
+            self.assertEqual(game.read_input(), "", "No input should result in ''")
+
+    @patch('os.name', 'nt') # Simulate Windows
+    @patch('msvcrt.kbhit')
+    @patch('msvcrt.getch')
+    def test_read_input_msvcrt_allowed_keys(self, mock_getch, mock_kbhit):
+        game = SnakeGame()
+        mock_kbhit.return_value = True # Simulate key pressed
+
+        # Test a normal allowed key
+        mock_getch.return_value = b'w'
+        self.assertEqual(game.read_input(), 'w')
+
+        # Test an arrow key sequence (e.g., UP arrow b'\xe0' then b'H')
+        mock_getch.side_effect = [b'\xe0', b'H']
+        self.assertEqual(game.read_input(), 'w')
+        
+        # Test a disallowed key
+        mock_getch.side_effect = None # Clear side_effect
+        mock_getch.return_value = b'x'
+        self.assertEqual(game.read_input(), '')
+
 
 if __name__ == '__main__':
     unittest.main()
