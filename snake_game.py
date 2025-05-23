@@ -124,7 +124,7 @@ class SnakeGame:
         elif readchar is not None:
             import select
 
-            if select.select([sys.stdin], [], [], 0.02)[0]:
+            if select.select([sys.stdin], [], [], 0.05)[0]:
                 direction = readchar.readchar()
                 if isinstance(direction, bytes):
                     direction = direction.decode()
@@ -158,7 +158,7 @@ class SnakeGame:
                 import termios
                 import tty
 
-                if select.select([sys.stdin], [], [], 0.02)[0]:
+                if select.select([sys.stdin], [], [], 0.05)[0]:
                     fd = sys.stdin.fileno()
                     old_settings = termios.tcgetattr(fd)
                     try:
