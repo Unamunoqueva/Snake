@@ -4,7 +4,8 @@ import os
 import random
 import sys
 import time
-from typing import List
+from typing import List, Deque, Tuple, Set
+from collections import deque
 
 try:
     import readchar  # type: ignore
@@ -23,45 +24,68 @@ class SnakeGame:
         self.height = height
         self.num_objects = num_objects
         self.my_position: List[int] = [3, 1]
-        self.item_positions: List[List[int]] = []
+        self.item_positions: Set[Tuple[int, int]] = set()
         self.tail_length = 0
-        self.tail: List[List[int]] = []
+        self.tail: Deque[Tuple[int, int]] = deque()
         self.end_game = False
         self.score = 0
         self.last_direction = "d"
 
     def clear_screen(self) -> None:
-        """Clear the terminal screen in a cross-platform way."""
-        os.system("cls" if os.name == "nt" else "clear")
+        """Clear the terminal screen using an ANSI escape sequence."""
+        print("\x1bc", end="")
 
     def spawn_items(self) -> None:
-        """Ensure there are enough items on the map."""
-        while len(self.item_positions) < self.num_objects:
-            new_position = [random.randint(0, self.width - 1), random.randint(0, self.height - 1)]
-            if new_position not in self.item_positions and new_position != self.my_position:
-                self.item_positions.append(new_position)
+        """Ensure there are enough items on the map, trying to place a limited number each tick."""
+        # 1. Calculate free_cells and num_to_spawn_this_tick
+        total_cells = self.width * self.height
+        occupied_by_head = 1
+        occupied_by_tail = len(self.tail)
+        occupied_by_items_count = len(self.item_positions)
+
+        free_cells = total_cells - occupied_by_head - occupied_by_tail - occupied_by_items_count
+
+        items_to_reach_target = self.num_objects - occupied_by_items_count
+        num_to_spawn_this_tick = max(0, min(items_to_reach_target, free_cells))
+
+        if num_to_spawn_this_tick == 0:
+            return
+
+        max_placement_attempts_per_item = 50
+
+        # 2. Spawning Loop
+        for _ in range(num_to_spawn_this_tick):
+            # 3. Individual Item Placement
+            for _ in range(max_placement_attempts_per_item): # attempt_num not used
+                new_pos_list = [random.randint(0, self.width - 1), random.randint(0, self.height - 1)]
+                new_pos_tuple = tuple(new_pos_list)
+
+                # Collision Checks
+                head_as_tuple = tuple(self.my_position)
+
+                is_on_item = new_pos_tuple in self.item_positions
+                is_on_head = new_pos_tuple == head_as_tuple
+                is_on_tail = new_pos_tuple in self.tail
+
+                if not is_on_item and not is_on_head and not is_on_tail:
+                    self.item_positions.add(new_pos_tuple)
+                    break  # Placed one item, move to the next in num_to_spawn_this_tick
 
     def draw_map(self) -> None:
         """Draw the game board."""
+        board = [[" " for _ in range(self.width)] for _ in range(self.height)]
+
+        for item_pos_tuple in self.item_positions: # item_pos_tuple is (x,y)
+            board[item_pos_tuple[POS_Y]][item_pos_tuple[POS_X]] = "*"
+
+        for segment in self.tail:
+            board[segment[POS_Y]][segment[POS_X]] = "@"
+
+        board[self.my_position[POS_Y]][self.my_position[POS_X]] = "@"
+
         print("+" + "-" * self.width * 3 + "+")
-        for coordinate_y in range(self.height):
-            print("|", end="")
-            for coordinate_x in range(self.width):
-                char_to_draw = " "
-
-                for item_position in self.item_positions:
-                    if item_position[POS_X] == coordinate_x and item_position[POS_Y] == coordinate_y:
-                        char_to_draw = "*"
-
-                for tail_piece in self.tail:
-                    if tail_piece[POS_X] == coordinate_x and tail_piece[POS_Y] == coordinate_y:
-                        char_to_draw = "@"
-
-                if self.my_position[POS_X] == coordinate_x and self.my_position[POS_Y] == coordinate_y:
-                    char_to_draw = "@"
-
-                print(f" {char_to_draw} ", end="")
-            print("|")
+        for row in board:
+            print("|" + "".join(f" {char} " for char in row) + "|")
         print("+" + "-" * self.width * 3 + "+")
         print(f"Score: {self.score} - Level: {self.level}")
 
@@ -157,26 +181,38 @@ class SnakeGame:
             return ""
         return direction
 
-    def update_position(self, direction: str) -> None:
+    def update_position(self, input_direction: str) -> None:
         """Update the snake position based on the direction."""
-        if direction == "":
-            direction = self.last_direction
+        current_direction_to_attempt = input_direction
+        if not current_direction_to_attempt:
+            current_direction_to_attempt = self.last_direction
 
-        if direction == "q":
+        if current_direction_to_attempt == "q":
             self.end_game = True
             return
 
+        final_direction_this_tick = current_direction_to_attempt
+        if self.tail_length > 0:
+            if (self.last_direction == "w" and current_direction_to_attempt == "s") or \
+               (self.last_direction == "s" and current_direction_to_attempt == "w") or \
+               (self.last_direction == "a" and current_direction_to_attempt == "d") or \
+               (self.last_direction == "d" and current_direction_to_attempt == "a"):
+                final_direction_this_tick = self.last_direction
+
         new_position = self.my_position.copy()
 
-        if direction == "w":
+        if final_direction_this_tick == "w":
             new_position[POS_Y] -= 1
-        elif direction == "a":
+        elif final_direction_this_tick == "a":
             new_position[POS_X] -= 1
-        elif direction == "s":
+        elif final_direction_this_tick == "s":
             new_position[POS_Y] += 1
-        elif direction == "d":
+        elif final_direction_this_tick == "d":
             new_position[POS_X] += 1
         else:
+            # This case should ideally not be reached if input is validated
+            # and 180-degree turn logic defaults to a valid last_direction.
+            # If it's reached, it implies an issue with direction handling.
             return
 
         # Wall collision detection
@@ -190,18 +226,24 @@ class SnakeGame:
             self.end_game = True
             return
 
-        self.tail.insert(0, self.my_position.copy())
-        self.tail = self.tail[: self.tail_length]
+        self.tail.appendleft(tuple(self.my_position.copy()))
+        if len(self.tail) > self.tail_length:
+            self.tail.pop()
+
         self.my_position = new_position
-        self.last_direction = direction
+        
+        if final_direction_this_tick in ("w", "a", "s", "d"):
+            self.last_direction = final_direction_this_tick
 
         # Check collisions after moving
-        if self.my_position in self.item_positions:
-            self.item_positions.remove(self.my_position)
+        head_pos_tuple = tuple(self.my_position)
+
+        if head_pos_tuple in self.item_positions:
+            self.item_positions.remove(head_pos_tuple)
             self.tail_length += 1
             self.score += 1
 
-        if self.my_position in self.tail:
+        if head_pos_tuple in self.tail: # self.tail is Deque[Tuple[int,int]]
             print("Has muerto")
             self.end_game = True
 
@@ -218,7 +260,9 @@ class SnakeGame:
             self.draw_map()
             direction = self.read_input()
             self.update_position(direction)
-            time.sleep(0.2)
+            
+            sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
+            time.sleep(sleep_duration)
 
 
 if __name__ == "__main__":
