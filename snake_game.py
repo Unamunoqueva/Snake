@@ -4,6 +4,8 @@ import os
 import random
 import sys
 import time
+import threading
+import queue
 from typing import List, Deque, Tuple, Set
 from collections import deque
 
@@ -14,6 +16,52 @@ except ImportError:  # pragma: no cover - fallback for environments without read
 
 POS_X = 0
 POS_Y = 1
+
+
+class InputThread(threading.Thread):
+    def __init__(self, read_char_function):
+        super().__init__(daemon=True) # Set as daemon thread so it exits when main program exits
+        self.read_char_function = read_char_function # This function will do the actual blocking read
+        self.key_queue = queue.Queue(maxsize=1)
+        self.stop_event = threading.Event()
+
+    def run(self):
+        while not self.stop_event.is_set():
+            try:
+                # The read_char_function is expected to be blocking
+                # and return a character (or mapped direction string)
+                # or None/raise an exception on timeout/error if it handles that internally.
+                # For now, assume it blocks until a key is pressed and returns it.
+                char = self.read_char_function() 
+                if char: # If a valid character/key was read
+                    # Clear the queue to store only the latest key
+                    try:
+                        self.key_queue.get_nowait()
+                    except queue.Empty:
+                        pass
+                    # Put the new key
+                    self.key_queue.put_nowait(char)
+                else:
+                    # If read_char_function can return None (e.g. on a timeout if not fully blocking)
+                    # prevent busy-waiting. A truly blocking read_char_function makes this less critical.
+                    time.sleep(0.01) # Small sleep if char is None
+            except Exception as e:
+                # Handle potential exceptions from read_char_function if necessary,
+                # or let them propagate if they indicate a serious issue.
+                # For robustness in a thread, it's often good to catch and log/ignore minor issues.
+                # print(f"Error in InputThread: {e}") # Optional: for debugging
+                if self.stop_event.is_set(): # Exit if stopping
+                    break
+                time.sleep(0.01) # Prevent busy loop on continuous errors
+
+    def get_key(self):
+        try:
+            return self.key_queue.get_nowait()
+        except queue.Empty:
+            return "" # Return empty string if no key is available
+
+    def stop(self):
+        self.stop_event.set()
 
 
 class SnakeGame:
@@ -30,6 +78,10 @@ class SnakeGame:
         self.end_game = False
         self.score = 0
         self.last_direction = "d"
+
+        # Initialize and start the input thread
+        self.input_thread = InputThread(read_char_function=self._read_keypress_blocking_internal)
+        self.input_thread.start()
 
     def clear_screen(self) -> None:
         """Clear the terminal screen using an ANSI escape sequence."""
@@ -89,103 +141,102 @@ class SnakeGame:
         print("+" + "-" * self.width * 3 + "+")
         print(f"Score: {self.score} - Level: {self.level}")
 
-    def read_input(self) -> str:
-        """Read and validate user input without blocking."""
+    def _read_keypress_blocking_internal(self) -> str:
+        """Reads a single keypress, blocking. Returns mapped direction or empty string."""
         allowed = ("w", "a", "s", "d", "q")
-
-        arrow_mapping = {}
-        if readchar is not None:
-            arrow_mapping = {
-                getattr(readchar, "key").UP: "w",
-                getattr(readchar, "key").DOWN: "s",
-                getattr(readchar, "key").LEFT: "a",
-                getattr(readchar, "key").RIGHT: "d",
-            }
-
-
         direction = ""
 
-        if os.name == "nt":  # Windows always relies on msvcrt
+        arrow_mapping = {}
+        if readchar is not None: # This check happens at module load time for readchar itself
+                                 # but here it's for initializing the map
+            # Ensure readchar and its 'key' attribute are valid before using getattr
+            if hasattr(readchar, 'key'):
+                # These might fail if readchar.key doesn't have all these (e.g. on some OS)
+                # A more robust way might be to try-except getattr for each
+                try: ArrowKeyUP = getattr(readchar, "key").UP 
+                except AttributeError: ArrowKeyUP = None # Or some other placeholder
+                try: ArrowKeyDOWN = getattr(readchar, "key").DOWN
+                except AttributeError: ArrowKeyDOWN = None
+                try: ArrowKeyLEFT = getattr(readchar, "key").LEFT
+                except AttributeError: ArrowKeyLEFT = None
+                try: ArrowKeyRIGHT = getattr(readchar, "key").RIGHT
+                except AttributeError: ArrowKeyRIGHT = None
+
+                arrow_mapping = {
+                    k:v for k,v in { # Filter out None keys if any getattr failed
+                        ArrowKeyUP: "w", ArrowKeyDOWN: "s",
+                        ArrowKeyLEFT: "a", ArrowKeyRIGHT: "d"
+                    }.items() if k is not None
+                }
+
+        if os.name == "nt":
             import msvcrt
-
-            if msvcrt.kbhit():
-
-                char = msvcrt.getch()
-                if char in (b"\x00", b"\xe0"):
-                    second = msvcrt.getch()
-                    mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
-                    direction = mapping.get(second, "")
-                else:
-                    if isinstance(char, bytes):
-                        char = char.decode()
-                    direction = char
-
+            char_bytes = msvcrt.getch() # Blocking read
+            if char_bytes in (b"\x00", b"\xe0"):  # Arrow key prefix
+                second_byte = msvcrt.getch()
+                # Mapping for common arrow keys on Windows
+                mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
+                direction = mapping.get(second_byte, "")
+            else:
+                try:
+                    direction = char_bytes.decode('utf-8')
+                except UnicodeDecodeError:
+                    direction = "" # Or handle error appropriately
 
         elif readchar is not None:
-            import select
-
-            if select.select([sys.stdin], [], [], 0.05)[0]:
-                direction = readchar.readchar()
-                if isinstance(direction, bytes):
-                    direction = direction.decode()
-
-                direction = arrow_mapping.get(direction, direction)
-
-        else:
-            # Fallback to built-in methods when readchar is unavailable
-            if os.name == "nt":  # Windows (this branch shouldn't occur)
-                import msvcrt
-
-                if msvcrt.kbhit():
-
-                    char = msvcrt.getch()
-                    if char in (b"\x00", b"\xe0"):
-                        second = msvcrt.getch()
-                        mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
-                        direction = mapping.get(second, "")
-                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
-                    # No duplicate print here.
-                    else:
-                        if isinstance(char, bytes):
-                            char = char.decode()
-                        direction = char
-                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
-                    # No duplicate print here.
-
-
+            # readchar.readchar() is blocking
+            key_pressed = readchar.readchar() 
+            if key_pressed in arrow_mapping:
+                direction = arrow_mapping[key_pressed]
             else:
-                import select
-                import termios
-                import tty
-
-                if select.select([sys.stdin], [], [], 0.05)[0]:
-                    fd = sys.stdin.fileno()
-                    old_settings = termios.tcgetattr(fd)
-                    try:
-                        tty.setraw(fd)
-
-                        char = sys.stdin.read(1)
-                        if char == "\x1b": # Arrow key
-                            # Try to read the next two characters for escape sequence
-                            # Use a short timeout to avoid blocking if it's just ESC key
-                            if select.select([sys.stdin], [], [], 0.01)[0]:
-                                char += sys.stdin.read(2)
-                        
-
-                        if char == "\x1b[A": direction = "w"
-                        elif char == "\x1b[B": direction = "s"
-                        elif char == "\x1b[D": direction = "a"
-                        elif char == "\x1b[C": direction = "d"
-                        else:
-                            direction = char # For single characters like 'q', 'w', 'a', 's', 'd'
-                        
-
-                    finally:
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                direction = key_pressed # Assume it's a direct char like 'q'
         
+        else: # Fallback for non-Windows, if readchar is not available
+            import termios
+            import tty
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno()) # Set raw mode
+                char = sys.stdin.read(1) # Blocking read of a single character
+
+                if char == "\x1b":  # Start of an escape sequence (likely arrow key)
+                    # Try to read the rest of the sequence non-blockingly for a short duration
+                    # This part is tricky because sys.stdin.read() in raw mode is blocking.
+                    # A true non-blocking read for sequence parts would need select here again,
+                    # or a different strategy. For simplicity, this example assumes common sequences.
+                    # A common way is to read 2 more chars, but this might block if it's just ESC.
+                    # For a robust solution, one might need a small select timeout here.
+                    # However, the prompt asked to remove select from the main blocking logic.
+                    # Let's assume a simple 3-char sequence for arrows:
+                    # This is a simplification; true handling is more complex.
+                    # For this exercise, we'll keep it simple as per prompt's focus.
+                    # A better way might be to put the read(2) in a try with short select.
+                    # Given the constraint to remove select, we'll assume common fixed length sequences.
+                    # This will behave poorly for lone ESC or other escape sequences.
+                    # The select for 0.01s was a good compromise. Re-adding for just this part:
+                    import select
+                    if sys.stdin in select.select([sys.stdin], [], [], 0.01)[0]:
+                        char += sys.stdin.read(2) 
+
+                # Map common ANSI escape sequences for arrow keys
+                if char == "\x1b[A": direction = "w"
+                elif char == "\x1b[B": direction = "s"
+                elif char == "\x1b[D": direction = "a"
+                elif char == "\x1b[C": direction = "d"
+                else:
+                    direction = char # Normal key like 'q'
+            
+            finally: # Always restore terminal settings
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
         if direction not in allowed:
             return ""
         return direction
+
+    def read_input(self) -> str:
+        """Gets the last pressed key from the input thread, non-blocking."""
+        return self.input_thread.get_key()
 
     def update_position(self, input_direction: str) -> None:
         """Update the snake position based on the direction."""
@@ -269,9 +320,41 @@ class SnakeGame:
             
             sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
             time.sleep(sleep_duration)
+        
+        # After game loop finishes, stop the input thread
+        print("Exiting game, stopping input thread...") # Optional debug print
+        self.input_thread.stop()
+        self.input_thread.join() # Wait for the thread to finish
+        print("Input thread stopped.") # Optional debug print
 
 
 if __name__ == "__main__":
-    game = SnakeGame()
-    game.clear_screen()
-    game.run()
+    # Terminal setup for raw/cbreak mode is often done outside the class,
+    # globally for the application's lifetime, especially for the tty part.
+    # For example, here or in the run() method before the loop and restored after.
+    # However, _read_keypress_blocking_internal handles its own tty settings for now.
+    
+    # It's also important that if the game crashes, terminal settings are restored.
+    # A try/finally block around game.run() in __main__ is good for this.
+    
+    original_terminal_settings = None
+    if os.name != 'nt' and not readchar: # If using tty fallback
+        try:
+            fd = sys.stdin.fileno()
+            original_terminal_settings = termios.tcgetattr(fd)
+        except termios.error: # Not a tty (e.g. when piping)
+            original_terminal_settings = None
+
+    try:
+        game = SnakeGame()
+        game.clear_screen()
+        game.run()
+    finally:
+        if original_terminal_settings:
+            try:
+                fd = sys.stdin.fileno()
+                termios.tcsetattr(fd, termios.TCSADRAIN, original_terminal_settings)
+                print("Terminal settings restored.")
+            except Exception as e:
+                print(f"Failed to restore terminal settings: {e}")
+        print("Game has exited.")

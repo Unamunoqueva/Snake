@@ -260,24 +260,153 @@ class SnakeGameTestCase(unittest.TestCase):
             self.assertEqual(game.read_input(), "", "No input should result in ''")
 
     @patch('os.name', 'nt') # Simulate Windows
-    @patch('msvcrt.kbhit')
+    # No kbhit mock needed as _read_keypress_blocking_internal calls getch directly
     @patch('msvcrt.getch')
-    def test_read_input_msvcrt_allowed_keys(self, mock_getch, mock_kbhit):
+    def test_blocking_internal_msvcrt_keys(self, mock_getch):
         game = SnakeGame()
-        mock_kbhit.return_value = True # Simulate key pressed
-
         # Test a normal allowed key
         mock_getch.return_value = b'w'
-        self.assertEqual(game.read_input(), 'w')
+        self.assertEqual(game._read_keypress_blocking_internal(), 'w')
 
         # Test an arrow key sequence (e.g., UP arrow b'\xe0' then b'H')
         mock_getch.side_effect = [b'\xe0', b'H']
-        self.assertEqual(game.read_input(), 'w')
+        self.assertEqual(game._read_keypress_blocking_internal(), 'w')
         
         # Test a disallowed key
         mock_getch.side_effect = None # Clear side_effect
         mock_getch.return_value = b'x'
-        self.assertEqual(game.read_input(), '')
+        self.assertEqual(game._read_keypress_blocking_internal(), '')
+        
+        # Stop the thread started by SnakeGame constructor
+        game.input_thread.stop()
+        game.input_thread.join()
+
+    # Renaming previous tests to reflect they test the internal blocking method now
+    @patch('select.select') 
+    @patch('snake_game.readchar') 
+    def test_blocking_internal_readchar_arrow_keys_mapping(self, mock_readchar_module, mock_select):
+        game = SnakeGame()
+        mock_readchar_module.key = unittest.mock.MagicMock()
+        mock_readchar_module.key.UP = "KEY_UP_CONST"
+        mock_readchar_module.key.DOWN = "KEY_DOWN_CONST"
+        mock_readchar_module.key.LEFT = "KEY_LEFT_CONST"
+        mock_readchar_module.key.RIGHT = "KEY_RIGHT_CONST"
+
+        with patch('os.name', 'posix'):
+            # For _read_keypress_blocking_internal, select is only used inside tty for escape seq
+            # For readchar path, readchar.readchar() is called directly.
+            # So, we don't need to mock select's return value for the primary readchar call.
+            
+            # Test UP arrow
+            mock_readchar_module.readchar.return_value = "KEY_UP_CONST"
+            self.assertEqual(game._read_keypress_blocking_internal(), "w", "UP arrow should map to 'w'")
+
+            mock_readchar_module.readchar.return_value = "KEY_DOWN_CONST"
+            self.assertEqual(game._read_keypress_blocking_internal(), "s", "DOWN arrow should map to 's'")
+
+            mock_readchar_module.readchar.return_value = "KEY_LEFT_CONST"
+            self.assertEqual(game._read_keypress_blocking_internal(), "a", "LEFT arrow should map to 'a'")
+
+            mock_readchar_module.readchar.return_value = "KEY_RIGHT_CONST"
+            self.assertEqual(game._read_keypress_blocking_internal(), "d", "RIGHT arrow should map to 'd'")
+
+            mock_readchar_module.readchar.return_value = "q"
+            self.assertEqual(game._read_keypress_blocking_internal(), "q", "Non-arrow 'q' should pass through")
+        
+        game.input_thread.stop()
+        game.input_thread.join()
+
+    @patch('select.select') # select is used in tty fallback for escape sequences
+    @patch('snake_game.readchar')
+    def test_blocking_internal_allowed_filtering(self, mock_readchar_module, mock_select):
+        game = SnakeGame()
+        with patch('os.name', 'posix'):
+            # Valid inputs
+            for valid_key in ["w", "a", "s", "d", "q"]:
+                mock_readchar_module.readchar.return_value = valid_key
+                self.assertEqual(game._read_keypress_blocking_internal(), valid_key, f"Valid key '{valid_key}' should pass filter")
+
+            # Invalid inputs
+            for invalid_key in ["x", "z", " ", "\n", "W"]:
+                mock_readchar_module.readchar.return_value = invalid_key
+                self.assertEqual(game._read_keypress_blocking_internal(), "", f"Invalid key '{invalid_key}' should be filtered to ''")
+        
+        game.input_thread.stop()
+        game.input_thread.join()
+
+    # New tests for InputThread and SnakeGame.read_input()
+    @patch('time.sleep', return_value=None) # Patch time.sleep in InputThread to speed up test
+    def test_input_thread_queue_logic(self, mock_sleep):
+        mock_blocking_read = unittest.mock.MagicMock()
+        # Import InputThread locally if it's not available at module level of test file
+        # from snake_game import InputThread # Assuming it's available via snake_game import
+        
+        # Need to access InputThread from the snake_game module
+        # This is a bit of a workaround if InputThread is not directly importable
+        # If snake_game.InputThread is how it's accessed, fine.
+        # For this test, let's assume we can get InputThread class
+        InputThread_class = getattr(sys.modules['snake_game'], 'InputThread')
+
+        input_thread = InputThread_class(read_char_function=mock_blocking_read)
+        input_thread.start()
+
+        # Simulate read_char_function returning a key
+        mock_blocking_read.return_value = "w"
+        # Give thread time to process. Loop until key is available or timeout.
+        key = ""
+        for _ in range(10): # Try up to 10 times (equiv to 10 * 0.01s if sleep wasn't mocked)
+            key = input_thread.get_key()
+            if key: break
+            time.sleep(0.005) # Small sleep to yield execution
+        self.assertEqual(key, "w")
+        self.assertEqual(input_thread.key_queue.qsize(), 0, "Queue should be empty after get_key")
+
+
+        # Simulate multiple keys rapidly: only last should be kept
+        mock_blocking_read.side_effect = ["a", "s", "d"]
+        # The thread's loop will call read_char_function multiple times.
+        # We need to ensure it runs enough times to process these.
+        # The queue clearing logic means only the last one processed before get_key will be there.
+        
+        # First 'a'
+        time.sleep(0.05) # Allow thread to process 'a'
+        self.assertEqual(input_thread.get_key(), "a")
+        
+        # Then 's'
+        time.sleep(0.05) # Allow thread to process 's'
+        self.assertEqual(input_thread.get_key(), "s")
+
+        # Then 'd'
+        time.sleep(0.05) # Allow thread to process 'd'
+        self.assertEqual(input_thread.get_key(), "d")
+        
+        # Verify get_key returns "" if queue is empty
+        self.assertEqual(input_thread.get_key(), "")
+
+        input_thread.stop()
+        input_thread.join()
+
+    def test_snake_game_read_input_integration(self):
+        game = SnakeGame()
+        # Mock the input_thread.get_key directly on the instance
+        game.input_thread.get_key = unittest.mock.MagicMock(return_value="test_key")
+        
+        self.assertEqual(game.read_input(), "test_key")
+        game.input_thread.get_key.assert_called_once()
+        
+        game.input_thread.stop() # Stop the original thread
+        game.input_thread.join()
+
+    def test_input_thread_stop_event(self):
+        mock_blocking_read = unittest.mock.MagicMock(return_value="w")
+        InputThread_class = getattr(sys.modules['snake_game'], 'InputThread')
+        input_thread = InputThread_class(read_char_function=mock_blocking_read)
+        
+        self.assertFalse(input_thread.stop_event.is_set())
+        input_thread.stop()
+        self.assertTrue(input_thread.stop_event.is_set())
+        # Note: .join() is not called here as the thread isn't started for this specific test.
+        # If it were started, join would be appropriate.
 
 
 if __name__ == '__main__':
