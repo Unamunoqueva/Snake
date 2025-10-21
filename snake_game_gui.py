@@ -143,6 +143,10 @@ class SnakeGameGUI(SnakeGame):
         self.update_position(direction)
         self.next_direction = ""
 
+        # Check if game ended during update_position
+        if self.end_game:
+            return
+
         # Then spawn items and redraw
         self.spawn_items()
         self.draw_map()
