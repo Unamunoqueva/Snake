@@ -95,6 +95,9 @@ class SnakeGameGUI(SnakeGame):
                     reason_text = "¡Te chocaste contigo mismo!"
                 elif self.end_game_reason == "salir":
                     reason_text = "Saliste del juego"
+                else:
+                    # Fallback for unexpected end_game_reason values
+                    reason_text = "Juego terminado"
 
                 self.canvas.create_text(
                     center_x,
