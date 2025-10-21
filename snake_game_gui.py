@@ -22,6 +22,15 @@ class SnakeGameGUI(SnakeGame):
 
     def __init__(self, width: int = 20, height: int = 10, num_objects: int = 20, cell_size: int = 20) -> None:
         super().__init__(width, height, num_objects)
+
+        # Validate cell_size parameter
+        if isinstance(cell_size, bool):
+            raise TypeError(f"cell_size must be an integer, got bool")
+        if not isinstance(cell_size, int):
+            raise TypeError(f"cell_size must be an integer, got {type(cell_size).__name__}")
+        if cell_size < 1:
+            raise ValueError(f"cell_size must be at least 1, got {cell_size}")
+
         self.cell_size = cell_size
         self.root = tk.Tk()
         self.root.title("Snake")
