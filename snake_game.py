@@ -90,8 +90,8 @@ class SnakeGame:
             highscore_path = Path(HIGHSCORE_FILE) if isinstance(HIGHSCORE_FILE, str) else HIGHSCORE_FILE
             with open(highscore_path, 'w') as f:
                 json.dump(self.highscore_data, f, indent=2)
-        except IOError:
-            pass  # Silently fail if we can't save
+        except (IOError, TypeError):
+            pass  # Silently fail if we can't save or data is not serializable
 
     @property
     def high_score(self) -> int:
