@@ -29,11 +29,18 @@ class SnakeGame:
     """A simple terminal-based snake game."""
 
     def __init__(self, width: int = 20, height: int = 10, num_objects: int = 20):
-        # Validate parameters
+        # Validate parameters - reject booleans explicitly (bool is subclass of int in Python)
+        if isinstance(width, bool):
+            raise TypeError(f"width must be an integer, got bool")
+        if isinstance(height, bool):
+            raise TypeError(f"height must be an integer, got bool")
+        if isinstance(num_objects, bool):
+            raise TypeError(f"num_objects must be an integer, got bool")
+
         if not isinstance(width, int):
             raise TypeError(f"width must be an integer, got {type(width).__name__}")
         if not isinstance(height, int):
-            raise TypeError(f"height must be an integer, got {type(height).__name__}")
+            raise TypeError(f"height must be an integer, got {type(width).__name__}")
         if not isinstance(num_objects, int):
             raise TypeError(f"num_objects must be an integer, got {type(num_objects).__name__}")
 
