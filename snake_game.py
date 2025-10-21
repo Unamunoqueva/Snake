@@ -364,9 +364,15 @@ class SnakeGame:
 
         print()
         # Note: _save_highscore() already updated games_played and total_score
-        avg_score = self.highscore_data["total_score"] / self.highscore_data["games_played"]
-        print(f"  Partidas Jugadas: {self.highscore_data['games_played']}")
-        print(f"  Puntuación Media: {avg_score:.1f}")
+        games_played = self.highscore_data["games_played"]
+        if games_played > 0:
+            avg_score = self.highscore_data["total_score"] / games_played
+            print(f"  Partidas Jugadas: {games_played}")
+            print(f"  Puntuación Media: {avg_score:.1f}")
+        else:
+            # Fallback if save failed and games_played is still 0
+            print(f"  Partidas Jugadas: 1")
+            print(f"  Puntuación Media: {self.score:.1f}")
         print("=" * 60)
         print()
 
