@@ -143,12 +143,18 @@ class SnakeGame:
         board = [[" " for _ in range(self.width)] for _ in range(self.height)]
 
         for item_pos_tuple in self.item_positions: # item_pos_tuple is (x,y)
-            board[item_pos_tuple[POS_Y]][item_pos_tuple[POS_X]] = "*"
+            # Validate bounds to prevent IndexError
+            if 0 <= item_pos_tuple[POS_Y] < self.height and 0 <= item_pos_tuple[POS_X] < self.width:
+                board[item_pos_tuple[POS_Y]][item_pos_tuple[POS_X]] = "*"
 
         for segment in self.tail:
-            board[segment[POS_Y]][segment[POS_X]] = "@"
+            # Validate bounds to prevent IndexError
+            if 0 <= segment[POS_Y] < self.height and 0 <= segment[POS_X] < self.width:
+                board[segment[POS_Y]][segment[POS_X]] = "@"
 
-        board[self.my_position[POS_Y]][self.my_position[POS_X]] = "@"
+        # Validate head position bounds
+        if 0 <= self.my_position[POS_Y] < self.height and 0 <= self.my_position[POS_X] < self.width:
+            board[self.my_position[POS_Y]][self.my_position[POS_X]] = "@"
 
         print("+" + "-" * self.width * 3 + "+")
         for row in board:

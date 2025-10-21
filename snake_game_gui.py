@@ -36,18 +36,22 @@ class SnakeGameGUI(SnakeGame):
     def draw_map(self) -> None:
         self.canvas.delete("all")
         for item in self.item_positions:
-            x1 = item[POS_X] * self.cell_size
-            y1 = item[POS_Y] * self.cell_size
-            x2 = x1 + self.cell_size
-            y2 = y1 + self.cell_size
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill="yellow")
+            # Validate bounds before drawing
+            if 0 <= item[POS_X] < self.width and 0 <= item[POS_Y] < self.height:
+                x1 = item[POS_X] * self.cell_size
+                y1 = item[POS_Y] * self.cell_size
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill="yellow")
 
         for part in [tuple(self.my_position)] + list(self.tail):
-            x1 = part[POS_X] * self.cell_size
-            y1 = part[POS_Y] * self.cell_size
-            x2 = x1 + self.cell_size
-            y2 = y1 + self.cell_size
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill="green")
+            # Validate bounds before drawing
+            if 0 <= part[POS_X] < self.width and 0 <= part[POS_Y] < self.height:
+                x1 = part[POS_X] * self.cell_size
+                y1 = part[POS_Y] * self.cell_size
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill="green")
 
         self.canvas.create_text(
             5,
