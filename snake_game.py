@@ -56,14 +56,17 @@ class SnakeGame:
 
     def _load_highscore(self) -> Dict[str, Any]:
         """Load high score data from file."""
+        default_data = {"high_score": 0, "games_played": 0, "total_score": 0}
         try:
             highscore_path = Path(HIGHSCORE_FILE) if isinstance(HIGHSCORE_FILE, str) else HIGHSCORE_FILE
             if highscore_path.exists():
                 with open(highscore_path, 'r') as f:
-                    return json.load(f)
-            return {"high_score": 0, "games_played": 0, "total_score": 0}
+                    loaded_data = json.load(f)
+                    # Merge with defaults to handle incomplete files from older versions
+                    return {**default_data, **loaded_data}
+            return default_data
         except (json.JSONDecodeError, IOError):
-            return {"high_score": 0, "games_played": 0, "total_score": 0}
+            return default_data
 
     def _save_highscore(self) -> None:
         """Save high score data to file."""
