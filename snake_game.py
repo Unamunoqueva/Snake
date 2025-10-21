@@ -192,11 +192,15 @@ class SnakeGame:
             import select
 
             if select.select([sys.stdin], [], [], 0.05)[0]:
-                direction = readchar.readchar()
-                if isinstance(direction, bytes):
-                    direction = direction.decode()
+                try:
+                    direction = readchar.readchar()
+                    if isinstance(direction, bytes):
+                        direction = direction.decode()
 
-                direction = arrow_mapping.get(direction, direction)
+                    direction = arrow_mapping.get(direction, direction)
+                except Exception:
+                    # Silently ignore read errors and return empty direction
+                    direction = ""
 
         else:
             # Fallback to built-in methods when readchar is unavailable on Unix
