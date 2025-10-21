@@ -158,12 +158,16 @@ class SnakeGame:
 
         arrow_mapping = {}
         if readchar is not None:
-            arrow_mapping = {
-                getattr(readchar, "key").UP: "w",
-                getattr(readchar, "key").DOWN: "s",
-                getattr(readchar, "key").LEFT: "a",
-                getattr(readchar, "key").RIGHT: "d",
-            }
+            try:
+                arrow_mapping = {
+                    getattr(readchar, "key").UP: "w",
+                    getattr(readchar, "key").DOWN: "s",
+                    getattr(readchar, "key").LEFT: "a",
+                    getattr(readchar, "key").RIGHT: "d",
+                }
+            except (AttributeError, TypeError):
+                # Fallback if readchar.key doesn't exist or is malformed
+                arrow_mapping = {}
 
 
         direction = ""
