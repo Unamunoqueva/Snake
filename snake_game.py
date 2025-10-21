@@ -186,56 +186,37 @@ class SnakeGame:
                 direction = arrow_mapping.get(direction, direction)
 
         else:
-            # Fallback to built-in methods when readchar is unavailable
-            if os.name == "nt":  # Windows (this branch shouldn't occur)
-                import msvcrt
+            # Fallback to built-in methods when readchar is unavailable on Unix
+            import select
+            import termios
+            import tty
 
-                if msvcrt.kbhit():
+            if select.select([sys.stdin], [], [], 0.05)[0]:
+                fd = sys.stdin.fileno()
+                old_settings = termios.tcgetattr(fd)
+                try:
+                    tty.setraw(fd)
 
-                    char = msvcrt.getch()
-                    if char in (b"\x00", b"\xe0"):
-                        second = msvcrt.getch()
-                        mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
-                        direction = mapping.get(second, "")
-                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
-                    # No duplicate print here.
+                    char = sys.stdin.read(1)
+                    if char == "\x1b":  # Arrow key
+                        # Try to read the next two characters for escape sequence
+                        # Use a short timeout to avoid blocking if it's just ESC key
+                        if select.select([sys.stdin], [], [], 0.01)[0]:
+                            char += sys.stdin.read(2)
+
+                    if char == "\x1b[A":
+                        direction = "w"
+                    elif char == "\x1b[B":
+                        direction = "s"
+                    elif char == "\x1b[D":
+                        direction = "a"
+                    elif char == "\x1b[C":
+                        direction = "d"
                     else:
-                        if isinstance(char, bytes):
-                            char = char.decode()
-                        direction = char
-                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
-                    # No duplicate print here.
+                        direction = char  # For single characters like 'q', 'w', 'a', 's', 'd'
 
-
-            else:
-                import select
-                import termios
-                import tty
-
-                if select.select([sys.stdin], [], [], 0.05)[0]:
-                    fd = sys.stdin.fileno()
-                    old_settings = termios.tcgetattr(fd)
-                    try:
-                        tty.setraw(fd)
-
-                        char = sys.stdin.read(1)
-                        if char == "\x1b": # Arrow key
-                            # Try to read the next two characters for escape sequence
-                            # Use a short timeout to avoid blocking if it's just ESC key
-                            if select.select([sys.stdin], [], [], 0.01)[0]:
-                                char += sys.stdin.read(2)
-                        
-
-                        if char == "\x1b[A": direction = "w"
-                        elif char == "\x1b[B": direction = "s"
-                        elif char == "\x1b[D": direction = "a"
-                        elif char == "\x1b[C": direction = "d"
-                        else:
-                            direction = char # For single characters like 'q', 'w', 'a', 's', 'd'
-                        
-
-                    finally:
-                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                finally:
+                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         
         if direction not in allowed:
             return ""
@@ -348,8 +329,9 @@ class SnakeGame:
             print(f"  Récord Actual: {self.high_score}")
 
         print()
-        avg_score = (self.highscore_data["total_score"] + self.score) / (self.highscore_data["games_played"] + 1)
-        print(f"  Partidas Jugadas: {self.highscore_data['games_played'] + 1}")
+        # Note: _save_highscore() already updated games_played and total_score
+        avg_score = self.highscore_data["total_score"] / self.highscore_data["games_played"]
+        print(f"  Partidas Jugadas: {self.highscore_data['games_played']}")
         print(f"  Puntuación Media: {avg_score:.1f}")
         print("=" * 60)
         print()
