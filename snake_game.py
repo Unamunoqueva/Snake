@@ -54,7 +54,19 @@ class SnakeGame:
         self.end_game = False
         self.end_game_reason = ""
         self.score = 0
-        self.last_direction = "d"
+        # Choose safe initial direction based on position and board size
+        # Prefer right if there's space, otherwise try down, left, up
+        if self.my_position[POS_X] < width - 1:
+            self.last_direction = "d"  # Can move right
+        elif self.my_position[POS_Y] < height - 1:
+            self.last_direction = "s"  # Can move down
+        elif self.my_position[POS_X] > 0:
+            self.last_direction = "a"  # Can move left
+        elif self.my_position[POS_Y] > 0:
+            self.last_direction = "w"  # Can move up
+        else:
+            # 1x1 board - no valid direction, but set something
+            self.last_direction = "d"
         self.highscore_data = self._load_highscore()
         self.game_start_time = time.time()
 
