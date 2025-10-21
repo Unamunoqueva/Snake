@@ -209,31 +209,35 @@ class SnakeGame:
             import tty
 
             if select.select([sys.stdin], [], [], 0.05)[0]:
-                fd = sys.stdin.fileno()
-                old_settings = termios.tcgetattr(fd)
                 try:
-                    tty.setraw(fd)
+                    fd = sys.stdin.fileno()
+                    old_settings = termios.tcgetattr(fd)
+                    try:
+                        tty.setraw(fd)
 
-                    char = sys.stdin.read(1)
-                    if char == "\x1b":  # Arrow key
-                        # Try to read the next two characters for escape sequence
-                        # Use a short timeout to avoid blocking if it's just ESC key
-                        if select.select([sys.stdin], [], [], 0.01)[0]:
-                            char += sys.stdin.read(2)
+                        char = sys.stdin.read(1)
+                        if char == "\x1b":  # Arrow key
+                            # Try to read the next two characters for escape sequence
+                            # Use a short timeout to avoid blocking if it's just ESC key
+                            if select.select([sys.stdin], [], [], 0.01)[0]:
+                                char += sys.stdin.read(2)
 
-                    if char == "\x1b[A":
-                        direction = "w"
-                    elif char == "\x1b[B":
-                        direction = "s"
-                    elif char == "\x1b[D":
-                        direction = "a"
-                    elif char == "\x1b[C":
-                        direction = "d"
-                    else:
-                        direction = char  # For single characters like 'q', 'w', 'a', 's', 'd'
+                        if char == "\x1b[A":
+                            direction = "w"
+                        elif char == "\x1b[B":
+                            direction = "s"
+                        elif char == "\x1b[D":
+                            direction = "a"
+                        elif char == "\x1b[C":
+                            direction = "d"
+                        else:
+                            direction = char  # For single characters like 'q', 'w', 'a', 's', 'd'
 
-                finally:
-                    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                    finally:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except (OSError, termios.error):
+                    # Silently ignore if stdin is not a terminal
+                    direction = ""
         
         if direction not in allowed:
             return ""
