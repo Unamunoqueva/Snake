@@ -32,9 +32,10 @@ class SnakeGameGUI(SnakeGame):
             bg="black",
         )
         self.canvas.pack()
-        self.root.bind("<KeyPress>", self.on_key_press)
         self.next_direction = ""
         self.game_over_text = None
+        # Bind key press handler AFTER initializing all attributes to avoid race condition
+        self.root.bind("<KeyPress>", self.on_key_press)
 
     def on_key_press(self, event: tk.Event) -> None:
         # Ignore input if game is over
