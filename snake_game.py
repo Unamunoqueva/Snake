@@ -30,6 +30,13 @@ class SnakeGame:
 
     def __init__(self, width: int = 20, height: int = 10, num_objects: int = 20):
         # Validate parameters
+        if not isinstance(width, int):
+            raise TypeError(f"width must be an integer, got {type(width).__name__}")
+        if not isinstance(height, int):
+            raise TypeError(f"height must be an integer, got {type(height).__name__}")
+        if not isinstance(num_objects, int):
+            raise TypeError(f"num_objects must be an integer, got {type(num_objects).__name__}")
+
         if width < 1:
             raise ValueError(f"width must be at least 1, got {width}")
         if height < 1:
