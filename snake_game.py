@@ -176,16 +176,19 @@ class SnakeGame:
             import msvcrt
 
             if msvcrt.kbhit():
-
-                char = msvcrt.getch()
-                if char in (b"\x00", b"\xe0"):
-                    second = msvcrt.getch()
-                    mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
-                    direction = mapping.get(second, "")
-                else:
-                    if isinstance(char, bytes):
-                        char = char.decode()
-                    direction = char
+                try:
+                    char = msvcrt.getch()
+                    if char in (b"\x00", b"\xe0"):
+                        second = msvcrt.getch()
+                        mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
+                        direction = mapping.get(second, "")
+                    else:
+                        if isinstance(char, bytes):
+                            char = char.decode()
+                        direction = char
+                except (OSError, UnicodeDecodeError):
+                    # Silently ignore read or decode errors
+                    direction = ""
 
 
         elif readchar is not None:
