@@ -1,4 +1,5 @@
 import tkinter as tk
+import time
 from snake_game import SnakeGame, POS_X, POS_Y
 
 
@@ -106,7 +107,7 @@ class SnakeGameGUI(SnakeGame):
                 )
 
                 # Show high score
-                is_new_highscore = self.score > self.highscore_data.get("high_score", 0) - self.score
+                is_new_highscore = self.score > self.highscore_data.get("high_score", 0)
                 highscore_text = f"Récord: {self.high_score}"
                 if is_new_highscore:
                     highscore_text = f"¡NUEVO RÉCORD! {self.high_score}"
@@ -120,7 +121,7 @@ class SnakeGameGUI(SnakeGame):
                 )
 
                 # Show stats
-                game_duration = int(self.game_start_time - self.game_start_time) if hasattr(self, 'game_end_time') else 0
+                game_duration = int(time.time() - self.game_start_time)
                 self.canvas.create_text(
                     center_x,
                     center_y + 50,
