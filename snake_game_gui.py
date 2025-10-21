@@ -133,18 +133,27 @@ class SnakeGameGUI(SnakeGame):
                     font=("Arial", 10),
                 )
             return
-        self.spawn_items()
-        self.draw_map()
+
+        # Update game state first
         direction = self.next_direction or self.last_direction
         self.update_position(direction)
         self.next_direction = ""
+
+        # Then spawn items and redraw
+        self.spawn_items()
+        self.draw_map()
 
         # Calculate dynamic speed based on level
         sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
         self.root.after(int(sleep_duration * 1000), self.game_step)
 
     def run(self) -> None:
-        self.root.after(0, self.game_step)
+        # Initial draw before starting game loop
+        self.spawn_items()
+        self.draw_map()
+        # Calculate initial speed
+        sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
+        self.root.after(int(sleep_duration * 1000), self.game_step)
         self.root.mainloop()
 
 
