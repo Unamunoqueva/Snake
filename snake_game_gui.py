@@ -23,6 +23,10 @@ class SnakeGameGUI(SnakeGame):
         self.game_over_text = None
 
     def on_key_press(self, event: tk.Event) -> None:
+        # Ignore input if game is over
+        if self.end_game:
+            return
+
         key = event.keysym.lower()
         mapping = {"up": "w", "down": "s", "left": "a", "right": "d"}
         key = mapping.get(key, key)
