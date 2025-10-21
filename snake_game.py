@@ -62,8 +62,14 @@ class SnakeGame:
             if highscore_path.exists():
                 with open(highscore_path, 'r') as f:
                     loaded_data = json.load(f)
-                    # Merge with defaults to handle incomplete files from older versions
-                    return {**default_data, **loaded_data}
+                    # Validate and sanitize loaded data types
+                    validated_data = {}
+                    for key in default_data.keys():
+                        if key in loaded_data and isinstance(loaded_data[key], int) and loaded_data[key] >= 0:
+                            validated_data[key] = loaded_data[key]
+                        else:
+                            validated_data[key] = default_data[key]
+                    return validated_data
             return default_data
         except (json.JSONDecodeError, IOError):
             return default_data
