@@ -135,7 +135,7 @@ class SnakeGameGUI(SnakeGame):
                 self.canvas.create_text(
                     center_x,
                     center_y + 50,
-                    text=f"Nivel: {self.level} | Longitud: {self.tail_length + 1}",
+                    text=f"Nivel: {self.level} | Longitud: {self.tail_length + 1} | Tiempo: {game_duration}s",
                     fill="white",
                     font=("Arial", 10),
                 )
