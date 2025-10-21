@@ -48,19 +48,85 @@ class SnakeGameGUI(SnakeGame):
             5,
             5,
             anchor="nw",
-            text=f"Score: {self.score} Level: {self.level}",
+            text=f"Score: {self.score} | Level: {self.level} | High Score: {self.high_score}",
             fill="white",
+            font=("Arial", 10, "bold"),
         )
 
     def game_step(self) -> None:
         if self.end_game:
             if self.game_over_text is None:
+                # Save high score
+                self._save_highscore()
+
+                # Display game over screen
+                center_x = self.width * self.cell_size / 2
+                center_y = self.height * self.cell_size / 2
+
+                self.canvas.create_rectangle(
+                    0, 0,
+                    self.width * self.cell_size,
+                    self.height * self.cell_size,
+                    fill="black",
+                    stipple="gray50"
+                )
+
                 self.game_over_text = self.canvas.create_text(
-                    self.width * self.cell_size / 2,
-                    self.height * self.cell_size / 2,
-                    text="Game Over",
+                    center_x,
+                    center_y - 60,
+                    text="GAME OVER",
                     fill="red",
-                    font=("Arial", 16),
+                    font=("Arial", 24, "bold"),
+                )
+
+                # Determine end reason
+                reason_text = ""
+                if self.end_game_reason == "pared":
+                    reason_text = "¡Chocaste con la pared!"
+                elif self.end_game_reason == "colision":
+                    reason_text = "¡Te chocaste contigo mismo!"
+                elif self.end_game_reason == "salir":
+                    reason_text = "Saliste del juego"
+
+                self.canvas.create_text(
+                    center_x,
+                    center_y - 30,
+                    text=reason_text,
+                    fill="white",
+                    font=("Arial", 12),
+                )
+
+                # Show final score
+                self.canvas.create_text(
+                    center_x,
+                    center_y,
+                    text=f"Puntuación Final: {self.score}",
+                    fill="yellow",
+                    font=("Arial", 14, "bold"),
+                )
+
+                # Show high score
+                is_new_highscore = self.score > self.highscore_data.get("high_score", 0) - self.score
+                highscore_text = f"Récord: {self.high_score}"
+                if is_new_highscore:
+                    highscore_text = f"¡NUEVO RÉCORD! {self.high_score}"
+
+                self.canvas.create_text(
+                    center_x,
+                    center_y + 25,
+                    text=highscore_text,
+                    fill="green" if is_new_highscore else "white",
+                    font=("Arial", 12, "bold"),
+                )
+
+                # Show stats
+                game_duration = int(self.game_start_time - self.game_start_time) if hasattr(self, 'game_end_time') else 0
+                self.canvas.create_text(
+                    center_x,
+                    center_y + 50,
+                    text=f"Nivel: {self.level} | Longitud: {self.tail_length + 1}",
+                    fill="white",
+                    font=("Arial", 10),
                 )
             return
         self.spawn_items()

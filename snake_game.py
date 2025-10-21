@@ -4,7 +4,9 @@ import os
 import random
 import sys
 import time
-from typing import List, Deque, Tuple, Set
+import json
+from pathlib import Path
+from typing import List, Deque, Tuple, Set, Dict, Any
 from collections import deque
 
 try:
@@ -14,6 +16,9 @@ except ImportError:  # pragma: no cover - fallback for environments without read
 
 POS_X = 0
 POS_Y = 1
+
+# High score file location
+HIGHSCORE_FILE = Path.home() / ".snake_highscore.json"
 
 
 class SnakeGame:
@@ -28,8 +33,42 @@ class SnakeGame:
         self.tail_length = 0
         self.tail: Deque[Tuple[int, int]] = deque()
         self.end_game = False
+        self.end_game_reason = ""
         self.score = 0
         self.last_direction = "d"
+        self.highscore_data = self._load_highscore()
+        self.game_start_time = time.time()
+
+    def _load_highscore(self) -> Dict[str, Any]:
+        """Load high score data from file."""
+        try:
+            highscore_path = Path(HIGHSCORE_FILE) if isinstance(HIGHSCORE_FILE, str) else HIGHSCORE_FILE
+            if highscore_path.exists():
+                with open(highscore_path, 'r') as f:
+                    return json.load(f)
+            return {"high_score": 0, "games_played": 0, "total_score": 0}
+        except (json.JSONDecodeError, IOError):
+            return {"high_score": 0, "games_played": 0, "total_score": 0}
+
+    def _save_highscore(self) -> None:
+        """Save high score data to file."""
+        try:
+            # Update statistics
+            self.highscore_data["games_played"] += 1
+            self.highscore_data["total_score"] += self.score
+            if self.score > self.highscore_data.get("high_score", 0):
+                self.highscore_data["high_score"] = self.score
+
+            highscore_path = Path(HIGHSCORE_FILE) if isinstance(HIGHSCORE_FILE, str) else HIGHSCORE_FILE
+            with open(highscore_path, 'w') as f:
+                json.dump(self.highscore_data, f, indent=2)
+        except IOError:
+            pass  # Silently fail if we can't save
+
+    @property
+    def high_score(self) -> int:
+        """Get the current high score."""
+        return self.highscore_data.get("high_score", 0)
 
     def clear_screen(self) -> None:
         """Clear the terminal screen using an ANSI escape sequence."""
@@ -87,7 +126,7 @@ class SnakeGame:
         for row in board:
             print("|" + "".join(f" {char} " for char in row) + "|")
         print("+" + "-" * self.width * 3 + "+")
-        print(f"Score: {self.score} - Level: {self.level}")
+        print(f"Score: {self.score} - Level: {self.level} - High Score: {self.high_score}")
 
     def read_input(self) -> str:
         """Read and validate user input without blocking."""
@@ -195,6 +234,7 @@ class SnakeGame:
 
         if current_direction_to_attempt == "q":
             self.end_game = True
+            self.end_game_reason = "salir"
             return
 
         final_direction_this_tick = current_direction_to_attempt
@@ -228,8 +268,8 @@ class SnakeGame:
             or new_position[POS_Y] < 0
             or new_position[POS_Y] >= self.height
         ):
-            print("Has chocado con la pared")
             self.end_game = True
+            self.end_game_reason = "pared"
             return
 
         self.tail.appendleft(tuple(self.my_position.copy()))
@@ -250,13 +290,51 @@ class SnakeGame:
             self.score += 1
 
         if head_pos_tuple in self.tail: # self.tail is Deque[Tuple[int,int]]
-            print("Has muerto")
             self.end_game = True
+            self.end_game_reason = "colision"
 
     @property
     def level(self) -> int:
         """Calculate the game level based on the score."""
         return self.score // 5 + 1
+
+    def _show_game_over(self) -> None:
+        """Display game over screen with statistics."""
+        self.clear_screen()
+        game_duration = int(time.time() - self.game_start_time)
+
+        print("\n" + "=" * 60)
+        print("GAME OVER".center(60))
+        print("=" * 60)
+
+        if self.end_game_reason == "pared":
+            print("Has chocado con la pared".center(60))
+        elif self.end_game_reason == "colision":
+            print("Te has chocado contigo mismo".center(60))
+        elif self.end_game_reason == "salir":
+            print("Has salido del juego".center(60))
+
+        print()
+        print(f"{'ESTADÍSTICAS':^60}")
+        print("-" * 60)
+        print(f"  Puntuación Final: {self.score}")
+        print(f"  Nivel Alcanzado: {self.level}")
+        print(f"  Longitud de la Serpiente: {self.tail_length + 1}")
+        print(f"  Tiempo de Juego: {game_duration} segundos")
+        print()
+
+        is_new_highscore = self.score > self.high_score
+        if is_new_highscore:
+            print(f"  ¡NUEVO RÉCORD! Puntuación anterior: {self.high_score}")
+        else:
+            print(f"  Récord Actual: {self.high_score}")
+
+        print()
+        avg_score = (self.highscore_data["total_score"] + self.score) / (self.highscore_data["games_played"] + 1)
+        print(f"  Partidas Jugadas: {self.highscore_data['games_played'] + 1}")
+        print(f"  Puntuación Media: {avg_score:.1f}")
+        print("=" * 60)
+        print()
 
     def run(self) -> None:
         """Run the main game loop."""
@@ -266,9 +344,13 @@ class SnakeGame:
             self.draw_map()
             direction = self.read_input()
             self.update_position(direction)
-            
+
             sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
             time.sleep(sleep_duration)
+
+        # Save high score and show game over screen
+        self._save_highscore()
+        self._show_game_over()
 
 
 if __name__ == "__main__":
