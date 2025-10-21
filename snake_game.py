@@ -25,10 +25,25 @@ class SnakeGame:
     """A simple terminal-based snake game."""
 
     def __init__(self, width: int = 20, height: int = 10, num_objects: int = 20):
+        # Validate parameters
+        if width < 1:
+            raise ValueError(f"width must be at least 1, got {width}")
+        if height < 1:
+            raise ValueError(f"height must be at least 1, got {height}")
+        if num_objects < 0:
+            raise ValueError(f"num_objects must be non-negative, got {num_objects}")
+
+        # Auto-adjust num_objects if it's too large for the board
+        max_objects = width * height - 1  # Leave at least 1 cell for the snake head
+        if num_objects > max_objects:
+            num_objects = max_objects
+
         self.width = width
         self.height = height
         self.num_objects = num_objects
-        self.my_position: List[int] = [3, 1]
+        # Set initial position to be safe within board bounds
+        # Try to use [3, 1] if possible, otherwise adjust to fit board
+        self.my_position: List[int] = [min(3, width - 1), min(1, height - 1)]
         self.item_positions: Set[Tuple[int, int]] = set()
         self.tail_length = 0
         self.tail: Deque[Tuple[int, int]] = deque()
@@ -298,7 +313,7 @@ class SnakeGame:
         """Calculate the game level based on the score."""
         return self.score // 5 + 1
 
-    def _show_game_over(self) -> None:
+    def _show_game_over(self, old_high_score: int) -> None:
         """Display game over screen with statistics."""
         self.clear_screen()
         game_duration = int(time.time() - self.game_start_time)
@@ -313,6 +328,9 @@ class SnakeGame:
             print("Te has chocado contigo mismo".center(60))
         elif self.end_game_reason == "salir":
             print("Has salido del juego".center(60))
+        else:
+            # Fallback for unexpected end_game_reason values
+            print("Juego terminado".center(60))
 
         print()
         print(f"{'ESTADÍSTICAS':^60}")
@@ -323,9 +341,9 @@ class SnakeGame:
         print(f"  Tiempo de Juego: {game_duration} segundos")
         print()
 
-        is_new_highscore = self.score > self.high_score
+        is_new_highscore = self.score > old_high_score
         if is_new_highscore:
-            print(f"  ¡NUEVO RÉCORD! Puntuación anterior: {self.high_score}")
+            print(f"  ¡NUEVO RÉCORD! Puntuación anterior: {old_high_score}")
         else:
             print(f"  Récord Actual: {self.high_score}")
 
@@ -349,8 +367,9 @@ class SnakeGame:
             time.sleep(sleep_duration)
 
         # Save high score and show game over screen
+        old_high_score = self.high_score
         self._save_highscore()
-        self._show_game_over()
+        self._show_game_over(old_high_score)
 
 
 if __name__ == "__main__":
