@@ -1,4 +1,18 @@
-import tkinter as tk
+try:
+    import tkinter as tk
+    TKINTER_AVAILABLE = True
+except ImportError:
+    # Tkinter not available - create dummy to allow module import
+    TKINTER_AVAILABLE = False
+    class tk:
+        """Dummy tkinter module for environments without tkinter."""
+        class Tk:
+            pass
+        class Canvas:
+            pass
+        class Event:
+            pass
+
 import time
 from snake_game import SnakeGame, POS_X, POS_Y
 
