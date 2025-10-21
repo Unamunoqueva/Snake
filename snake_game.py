@@ -18,7 +18,11 @@ POS_X = 0
 POS_Y = 1
 
 # High score file location
-HIGHSCORE_FILE = Path.home() / ".snake_highscore.json"
+try:
+    HIGHSCORE_FILE = Path.home() / ".snake_highscore.json"
+except RuntimeError:
+    # Fallback to current directory if home directory cannot be determined
+    HIGHSCORE_FILE = Path(".snake_highscore.json")
 
 
 class SnakeGame:
