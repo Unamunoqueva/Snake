@@ -38,7 +38,7 @@ class SnakeGameGUI(SnakeGame):
             y2 = y1 + self.cell_size
             self.canvas.create_rectangle(x1, y1, x2, y2, fill="yellow")
 
-        for part in [self.my_position] + self.tail:
+        for part in [tuple(self.my_position)] + list(self.tail):
             x1 = part[POS_X] * self.cell_size
             y1 = part[POS_Y] * self.cell_size
             x2 = x1 + self.cell_size
@@ -57,6 +57,9 @@ class SnakeGameGUI(SnakeGame):
     def game_step(self) -> None:
         if self.end_game:
             if self.game_over_text is None:
+                # Save old high score before updating
+                old_high_score = self.high_score
+
                 # Save high score
                 self._save_highscore()
 
@@ -107,7 +110,7 @@ class SnakeGameGUI(SnakeGame):
                 )
 
                 # Show high score
-                is_new_highscore = self.score > self.highscore_data.get("high_score", 0)
+                is_new_highscore = self.score > old_high_score
                 highscore_text = f"Récord: {self.high_score}"
                 if is_new_highscore:
                     highscore_text = f"¡NUEVO RÉCORD! {self.high_score}"
@@ -135,7 +138,10 @@ class SnakeGameGUI(SnakeGame):
         direction = self.next_direction or self.last_direction
         self.update_position(direction)
         self.next_direction = ""
-        self.root.after(200, self.game_step)
+
+        # Calculate dynamic speed based on level
+        sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
+        self.root.after(int(sleep_duration * 1000), self.game_step)
 
     def run(self) -> None:
         self.root.after(0, self.game_step)
