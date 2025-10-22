@@ -18,37 +18,91 @@ POS_X = 0
 POS_Y = 1
 
 # High score file location
-HIGHSCORE_FILE = Path.home() / ".snake_highscore.json"
+try:
+    HIGHSCORE_FILE = Path.home() / ".snake_highscore.json"
+except RuntimeError:
+    # Fallback to current directory if home directory cannot be determined
+    HIGHSCORE_FILE = Path(".snake_highscore.json")
 
 
 class SnakeGame:
     """A simple terminal-based snake game."""
 
     def __init__(self, width: int = 20, height: int = 10, num_objects: int = 20):
+        # Validate parameters - reject booleans explicitly (bool is subclass of int in Python)
+        if isinstance(width, bool):
+            raise TypeError(f"width must be an integer, got bool")
+        if isinstance(height, bool):
+            raise TypeError(f"height must be an integer, got bool")
+        if isinstance(num_objects, bool):
+            raise TypeError(f"num_objects must be an integer, got bool")
+
+        if not isinstance(width, int):
+            raise TypeError(f"width must be an integer, got {type(width).__name__}")
+        if not isinstance(height, int):
+            raise TypeError(f"height must be an integer, got {type(width).__name__}")
+        if not isinstance(num_objects, int):
+            raise TypeError(f"num_objects must be an integer, got {type(num_objects).__name__}")
+
+        if width < 1:
+            raise ValueError(f"width must be at least 1, got {width}")
+        if height < 1:
+            raise ValueError(f"height must be at least 1, got {height}")
+        if num_objects < 0:
+            raise ValueError(f"num_objects must be non-negative, got {num_objects}")
+
+        # Auto-adjust num_objects if it's too large for the board
+        max_objects = width * height - 1  # Leave at least 1 cell for the snake head
+        if num_objects > max_objects:
+            num_objects = max_objects
+
         self.width = width
         self.height = height
         self.num_objects = num_objects
-        self.my_position: List[int] = [3, 1]
+        # Set initial position to be safe within board bounds
+        # Try to use [3, 1] if possible, otherwise adjust to fit board
+        self.my_position: List[int] = [min(3, width - 1), min(1, height - 1)]
         self.item_positions: Set[Tuple[int, int]] = set()
         self.tail_length = 0
         self.tail: Deque[Tuple[int, int]] = deque()
         self.end_game = False
         self.end_game_reason = ""
         self.score = 0
-        self.last_direction = "d"
+        # Choose safe initial direction based on position and board size
+        # Prefer right if there's space, otherwise try down, left, up
+        if self.my_position[POS_X] < width - 1:
+            self.last_direction = "d"  # Can move right
+        elif self.my_position[POS_Y] < height - 1:
+            self.last_direction = "s"  # Can move down
+        elif self.my_position[POS_X] > 0:
+            self.last_direction = "a"  # Can move left
+        elif self.my_position[POS_Y] > 0:
+            self.last_direction = "w"  # Can move up
+        else:
+            # 1x1 board - no valid direction, but set something
+            self.last_direction = "d"
         self.highscore_data = self._load_highscore()
         self.game_start_time = time.time()
 
     def _load_highscore(self) -> Dict[str, Any]:
         """Load high score data from file."""
+        default_data = {"high_score": 0, "games_played": 0, "total_score": 0}
         try:
             highscore_path = Path(HIGHSCORE_FILE) if isinstance(HIGHSCORE_FILE, str) else HIGHSCORE_FILE
             if highscore_path.exists():
                 with open(highscore_path, 'r') as f:
-                    return json.load(f)
-            return {"high_score": 0, "games_played": 0, "total_score": 0}
+                    loaded_data = json.load(f)
+                    # Validate and sanitize loaded data types
+                    validated_data = {}
+                    for key in default_data.keys():
+                        if key in loaded_data and isinstance(loaded_data[key], int) and loaded_data[key] >= 0:
+                            validated_data[key] = loaded_data[key]
+                        else:
+                            validated_data[key] = default_data[key]
+                    return validated_data
+            return default_data
         except (json.JSONDecodeError, IOError):
-            return {"high_score": 0, "games_played": 0, "total_score": 0}
+            return default_data
 
     def _save_highscore(self) -> None:
         """Save high score data to file."""
@@ -62,8 +116,8 @@ class SnakeGame:
             highscore_path = Path(HIGHSCORE_FILE) if isinstance(HIGHSCORE_FILE, str) else HIGHSCORE_FILE
             with open(highscore_path, 'w') as f:
                 json.dump(self.highscore_data, f, indent=2)
-        except IOError:
-            pass  # Silently fail if we can't save
+        except (IOError, TypeError):
+            pass  # Silently fail if we can't save or data is not serializable
 
     @property
     def high_score(self) -> int:
@@ -115,12 +169,18 @@ class SnakeGame:
         board = [[" " for _ in range(self.width)] for _ in range(self.height)]
 
         for item_pos_tuple in self.item_positions: # item_pos_tuple is (x,y)
-            board[item_pos_tuple[POS_Y]][item_pos_tuple[POS_X]] = "*"
+            # Validate bounds to prevent IndexError
+            if 0 <= item_pos_tuple[POS_Y] < self.height and 0 <= item_pos_tuple[POS_X] < self.width:
+                board[item_pos_tuple[POS_Y]][item_pos_tuple[POS_X]] = "*"
 
         for segment in self.tail:
-            board[segment[POS_Y]][segment[POS_X]] = "@"
+            # Validate bounds to prevent IndexError
+            if 0 <= segment[POS_Y] < self.height and 0 <= segment[POS_X] < self.width:
+                board[segment[POS_Y]][segment[POS_X]] = "@"
 
-        board[self.my_position[POS_Y]][self.my_position[POS_X]] = "@"
+        # Validate head position bounds
+        if 0 <= self.my_position[POS_Y] < self.height and 0 <= self.my_position[POS_X] < self.width:
+            board[self.my_position[POS_Y]][self.my_position[POS_X]] = "@"
 
         print("+" + "-" * self.width * 3 + "+")
         for row in board:
@@ -134,12 +194,16 @@ class SnakeGame:
 
         arrow_mapping = {}
         if readchar is not None:
-            arrow_mapping = {
-                getattr(readchar, "key").UP: "w",
-                getattr(readchar, "key").DOWN: "s",
-                getattr(readchar, "key").LEFT: "a",
-                getattr(readchar, "key").RIGHT: "d",
-            }
+            try:
+                arrow_mapping = {
+                    getattr(readchar, "key").UP: "w",
+                    getattr(readchar, "key").DOWN: "s",
+                    getattr(readchar, "key").LEFT: "a",
+                    getattr(readchar, "key").RIGHT: "d",
+                }
+            except (AttributeError, TypeError):
+                # Fallback if readchar.key doesn't exist or is malformed
+                arrow_mapping = {}
 
 
         direction = ""
@@ -148,79 +212,71 @@ class SnakeGame:
             import msvcrt
 
             if msvcrt.kbhit():
-
-                char = msvcrt.getch()
-                if char in (b"\x00", b"\xe0"):
-                    second = msvcrt.getch()
-                    mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
-                    direction = mapping.get(second, "")
-                else:
-                    if isinstance(char, bytes):
-                        char = char.decode()
-                    direction = char
+                try:
+                    char = msvcrt.getch()
+                    if char in (b"\x00", b"\xe0"):
+                        second = msvcrt.getch()
+                        mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
+                        direction = mapping.get(second, "")
+                    else:
+                        if isinstance(char, bytes):
+                            char = char.decode()
+                        direction = char
+                except (OSError, UnicodeDecodeError):
+                    # Silently ignore read or decode errors
+                    direction = ""
 
 
         elif readchar is not None:
             import select
 
             if select.select([sys.stdin], [], [], 0.05)[0]:
-                direction = readchar.readchar()
-                if isinstance(direction, bytes):
-                    direction = direction.decode()
+                try:
+                    direction = readchar.readchar()
+                    if isinstance(direction, bytes):
+                        direction = direction.decode()
 
-                direction = arrow_mapping.get(direction, direction)
+                    direction = arrow_mapping.get(direction, direction)
+                except Exception:
+                    # Silently ignore read errors and return empty direction
+                    direction = ""
 
         else:
-            # Fallback to built-in methods when readchar is unavailable
-            if os.name == "nt":  # Windows (this branch shouldn't occur)
-                import msvcrt
+            # Fallback to built-in methods when readchar is unavailable on Unix
+            import select
+            import termios
+            import tty
 
-                if msvcrt.kbhit():
-
-                    char = msvcrt.getch()
-                    if char in (b"\x00", b"\xe0"):
-                        second = msvcrt.getch()
-                        mapping = {b"H": "w", b"P": "s", b"K": "a", b"M": "d"}
-                        direction = mapping.get(second, "")
-                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
-                    # No duplicate print here.
-                    else:
-                        if isinstance(char, bytes):
-                            char = char.decode()
-                        direction = char
-                    # This is a nested msvcrt block, the print was added in the primary msvcrt block above.
-                    # No duplicate print here.
-
-
-            else:
-                import select
-                import termios
-                import tty
-
-                if select.select([sys.stdin], [], [], 0.05)[0]:
+            if select.select([sys.stdin], [], [], 0.05)[0]:
+                try:
                     fd = sys.stdin.fileno()
                     old_settings = termios.tcgetattr(fd)
                     try:
                         tty.setraw(fd)
 
                         char = sys.stdin.read(1)
-                        if char == "\x1b": # Arrow key
+                        if char == "\x1b":  # Arrow key
                             # Try to read the next two characters for escape sequence
                             # Use a short timeout to avoid blocking if it's just ESC key
                             if select.select([sys.stdin], [], [], 0.01)[0]:
                                 char += sys.stdin.read(2)
-                        
 
-                        if char == "\x1b[A": direction = "w"
-                        elif char == "\x1b[B": direction = "s"
-                        elif char == "\x1b[D": direction = "a"
-                        elif char == "\x1b[C": direction = "d"
+                        if char == "\x1b[A":
+                            direction = "w"
+                        elif char == "\x1b[B":
+                            direction = "s"
+                        elif char == "\x1b[D":
+                            direction = "a"
+                        elif char == "\x1b[C":
+                            direction = "d"
                         else:
-                            direction = char # For single characters like 'q', 'w', 'a', 's', 'd'
-                        
+                            direction = char  # For single characters like 'q', 'w', 'a', 's', 'd'
 
                     finally:
                         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+                except (OSError, termios.error):
+                    # Silently ignore if stdin is not a terminal
+                    direction = ""
         
         if direction not in allowed:
             return ""
@@ -298,7 +354,7 @@ class SnakeGame:
         """Calculate the game level based on the score."""
         return self.score // 5 + 1
 
-    def _show_game_over(self) -> None:
+    def _show_game_over(self, old_high_score: int) -> None:
         """Display game over screen with statistics."""
         self.clear_screen()
         game_duration = int(time.time() - self.game_start_time)
@@ -313,6 +369,9 @@ class SnakeGame:
             print("Te has chocado contigo mismo".center(60))
         elif self.end_game_reason == "salir":
             print("Has salido del juego".center(60))
+        else:
+            # Fallback for unexpected end_game_reason values
+            print("Juego terminado".center(60))
 
         print()
         print(f"{'ESTADÍSTICAS':^60}")
@@ -323,16 +382,23 @@ class SnakeGame:
         print(f"  Tiempo de Juego: {game_duration} segundos")
         print()
 
-        is_new_highscore = self.score > self.high_score
+        is_new_highscore = self.score > old_high_score
         if is_new_highscore:
-            print(f"  ¡NUEVO RÉCORD! Puntuación anterior: {self.high_score}")
+            print(f"  ¡NUEVO RÉCORD! Puntuación anterior: {old_high_score}")
         else:
             print(f"  Récord Actual: {self.high_score}")
 
         print()
-        avg_score = (self.highscore_data["total_score"] + self.score) / (self.highscore_data["games_played"] + 1)
-        print(f"  Partidas Jugadas: {self.highscore_data['games_played'] + 1}")
-        print(f"  Puntuación Media: {avg_score:.1f}")
+        # Note: _save_highscore() already updated games_played and total_score
+        games_played = self.highscore_data["games_played"]
+        if games_played > 0:
+            avg_score = self.highscore_data["total_score"] / games_played
+            print(f"  Partidas Jugadas: {games_played}")
+            print(f"  Puntuación Media: {avg_score:.1f}")
+        else:
+            # Fallback if save failed and games_played is still 0
+            print(f"  Partidas Jugadas: 1")
+            print(f"  Puntuación Media: {self.score:.1f}")
         print("=" * 60)
         print()
 
@@ -349,8 +415,9 @@ class SnakeGame:
             time.sleep(sleep_duration)
 
         # Save high score and show game over screen
+        old_high_score = self.high_score
         self._save_highscore()
-        self._show_game_over()
+        self._show_game_over(old_high_score)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,18 @@
-import tkinter as tk
+try:
+    import tkinter as tk
+    TKINTER_AVAILABLE = True
+except ImportError:
+    # Tkinter not available - create dummy to allow module import
+    TKINTER_AVAILABLE = False
+    class tk:
+        """Dummy tkinter module for environments without tkinter."""
+        class Tk:
+            pass
+        class Canvas:
+            pass
+        class Event:
+            pass
+
 import time
 from snake_game import SnakeGame, POS_X, POS_Y
 
@@ -8,6 +22,15 @@ class SnakeGameGUI(SnakeGame):
 
     def __init__(self, width: int = 20, height: int = 10, num_objects: int = 20, cell_size: int = 20) -> None:
         super().__init__(width, height, num_objects)
+
+        # Validate cell_size parameter
+        if isinstance(cell_size, bool):
+            raise TypeError(f"cell_size must be an integer, got bool")
+        if not isinstance(cell_size, int):
+            raise TypeError(f"cell_size must be an integer, got {type(cell_size).__name__}")
+        if cell_size < 1:
+            raise ValueError(f"cell_size must be at least 1, got {cell_size}")
+
         self.cell_size = cell_size
         self.root = tk.Tk()
         self.root.title("Snake")
@@ -18,11 +41,16 @@ class SnakeGameGUI(SnakeGame):
             bg="black",
         )
         self.canvas.pack()
-        self.root.bind("<KeyPress>", self.on_key_press)
         self.next_direction = ""
         self.game_over_text = None
+        # Bind key press handler AFTER initializing all attributes to avoid race condition
+        self.root.bind("<KeyPress>", self.on_key_press)
 
     def on_key_press(self, event: tk.Event) -> None:
+        # Ignore input if game is over
+        if self.end_game:
+            return
+
         key = event.keysym.lower()
         mapping = {"up": "w", "down": "s", "left": "a", "right": "d"}
         key = mapping.get(key, key)
@@ -32,18 +60,22 @@ class SnakeGameGUI(SnakeGame):
     def draw_map(self) -> None:
         self.canvas.delete("all")
         for item in self.item_positions:
-            x1 = item[POS_X] * self.cell_size
-            y1 = item[POS_Y] * self.cell_size
-            x2 = x1 + self.cell_size
-            y2 = y1 + self.cell_size
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill="yellow")
+            # Validate bounds before drawing
+            if 0 <= item[POS_X] < self.width and 0 <= item[POS_Y] < self.height:
+                x1 = item[POS_X] * self.cell_size
+                y1 = item[POS_Y] * self.cell_size
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill="yellow")
 
-        for part in [self.my_position] + self.tail:
-            x1 = part[POS_X] * self.cell_size
-            y1 = part[POS_Y] * self.cell_size
-            x2 = x1 + self.cell_size
-            y2 = y1 + self.cell_size
-            self.canvas.create_rectangle(x1, y1, x2, y2, fill="green")
+        for part in [tuple(self.my_position)] + list(self.tail):
+            # Validate bounds before drawing
+            if 0 <= part[POS_X] < self.width and 0 <= part[POS_Y] < self.height:
+                x1 = part[POS_X] * self.cell_size
+                y1 = part[POS_Y] * self.cell_size
+                x2 = x1 + self.cell_size
+                y2 = y1 + self.cell_size
+                self.canvas.create_rectangle(x1, y1, x2, y2, fill="green")
 
         self.canvas.create_text(
             5,
@@ -57,6 +89,9 @@ class SnakeGameGUI(SnakeGame):
     def game_step(self) -> None:
         if self.end_game:
             if self.game_over_text is None:
+                # Save old high score before updating
+                old_high_score = self.high_score
+
                 # Save high score
                 self._save_highscore()
 
@@ -88,6 +123,9 @@ class SnakeGameGUI(SnakeGame):
                     reason_text = "¡Te chocaste contigo mismo!"
                 elif self.end_game_reason == "salir":
                     reason_text = "Saliste del juego"
+                else:
+                    # Fallback for unexpected end_game_reason values
+                    reason_text = "Juego terminado"
 
                 self.canvas.create_text(
                     center_x,
@@ -107,7 +145,7 @@ class SnakeGameGUI(SnakeGame):
                 )
 
                 # Show high score
-                is_new_highscore = self.score > self.highscore_data.get("high_score", 0)
+                is_new_highscore = self.score > old_high_score
                 highscore_text = f"Récord: {self.high_score}"
                 if is_new_highscore:
                     highscore_text = f"¡NUEVO RÉCORD! {self.high_score}"
@@ -125,20 +163,32 @@ class SnakeGameGUI(SnakeGame):
                 self.canvas.create_text(
                     center_x,
                     center_y + 50,
-                    text=f"Nivel: {self.level} | Longitud: {self.tail_length + 1}",
+                    text=f"Nivel: {self.level} | Longitud: {self.tail_length + 1} | Tiempo: {game_duration}s",
                     fill="white",
                     font=("Arial", 10),
                 )
             return
-        self.spawn_items()
-        self.draw_map()
+
+        # Update game state first
         direction = self.next_direction or self.last_direction
         self.update_position(direction)
         self.next_direction = ""
-        self.root.after(200, self.game_step)
+
+        # Always spawn items and redraw to show the final state
+        self.spawn_items()
+        self.draw_map()
+
+        # Calculate dynamic speed based on level
+        sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
+        self.root.after(int(sleep_duration * 1000), self.game_step)
 
     def run(self) -> None:
-        self.root.after(0, self.game_step)
+        # Initial draw before starting game loop
+        self.spawn_items()
+        self.draw_map()
+        # Calculate initial speed
+        sleep_duration = max(0.05, 0.2 - (self.level - 1) * 0.02)
+        self.root.after(int(sleep_duration * 1000), self.game_step)
         self.root.mainloop()
 
 
